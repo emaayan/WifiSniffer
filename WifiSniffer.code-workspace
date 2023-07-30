@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "Esp32Sniffer"
+		},
+		{
+			"path": "WifiSnifferCtrl"
+		},
+		{
+			"path": "ArduinoWifiSniffer"
+		}
+	],
+	"settings": {}
+}

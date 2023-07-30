@@ -1,0 +1,107 @@
+menu "Snifer Configuration"
+
+	choice WIFI_CONNECT_METHOD
+		prompt "Wifi Connectiom Method"
+		default WIFI_SOFTAP
+		help
+			Connection Method
+
+		config WIFI_NONE
+			bool "None"
+		config WIFI_SOFTAP
+			bool "SoftAp"
+		config WIFI_STA
+			bool "Station"
+	endchoice
+
+	config SOFTAP_WIFI_SSID
+		depends on WIFI_SOFTAP
+        string "WiFi SSID"
+        default "myssid"
+        help
+            SSID (network name).
+
+    config SOFTAP_WIFI_PASSWORD
+		depends on WIFI_SOFTAP
+        string "WiFi Password"
+        default "mypassword"
+        help
+            WiFi password (WPA or WPA2) for soft ap.
+
+    config SOFTAP_WIFI_CHANNEL
+		depends on WIFI_SOFTAP
+        int "Soft AP WiFi Channel"
+        range 1 13
+        default 1
+        help
+            WiFi channel (network channel).
+
+	config SOFTAP_WIFI_IP
+		depends on WIFI_SOFTAP
+		string "IP For SoftAP"
+		default "192.168.4.1"
+		help
+			Initial IP for Soft AP mode.
+
+    config MAX_STA_CONN_TO_AP
+		depends on WIFI_SOFTAP
+        int "Maximal STA connections"
+        default 4
+        help
+            Max number of the STA connects to AP.
+
+	config STA_WIFI_SSID
+		depends on WIFI_STA
+		string "WiFi SSID"
+		default "myssid"
+		help
+			SSID (network name).
+
+	config STA_WIFI_PASSWORD
+		depends on WIFI_STA
+		string "Station WiFi Password"
+		default "mypassword"
+		help
+			WiFi password (WPA or WPA2).
+		
+	config CHANNEL
+		depends on WIFI_NONE
+		int "Sniffing channel"
+		range 1 13
+		default 11
+		help
+			Channel in which ESP32 will sniff PROBE REQUEST
+	
+	config SNIFFING_TIME
+		depends on WIFI_NONE
+		int "Time of sniffig in seconds"
+		default 60
+		help
+			Time must be in seconds
+		
+	config TCP_SERVER_PORT
+		int "Port"
+		range 0 65535
+		default 19000
+		help
+			Local port the example server will listen on.
+
+	config TCP_SERVER_KEEPALIVE_IDLE
+		int "TCP keep-alive idle time(s)"
+		default 5
+		help
+			Keep-alive idle time. In idle time without receiving any data from peer, will send keep-alive probe packet
+
+	config TCP_SERVER_KEEPALIVE_INTERVAL
+		int "TCP keep-alive interval time(s)"
+		default 5
+		help
+			Keep-alive probe packet interval time.
+
+	config TCP_SERVER_KEEPALIVE_COUNT
+		int "TCP keep-alive packet retry send counts"
+		default 3
+		help
+			Keep-alive probe packet retry count.
+
+endmenu

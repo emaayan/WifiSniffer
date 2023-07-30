@@ -1,0 +1,9 @@
+Esp32Sniffer/sdkconfig
+Esp32Sniffer/dependencies.lock
+Esp32Sniffer/sdkconfig.old
+Esp32Sniffer/build/**
+Esp32Sniffer/.devcontainer/**
+Esp32Sniffer/managed_components/**
+ArduinoWifiSniffer/.vscode/settings.json
+ArduinoWifiSniffer/sdkconfig.esp32idf
+WifiSnifferCtrl/.idea/**

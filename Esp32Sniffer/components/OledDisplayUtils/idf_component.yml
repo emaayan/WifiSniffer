@@ -1,0 +1,7 @@
+## IDF Component Manager Manifest File
+version: 1.0.0
+dependencies:
+  espressif/ssd1306: "^1.0.5"
+  ## Required IDF version
+  idf:
+    version: ">=4.1.0"

@@ -39,7 +39,7 @@ menu "Snifer Configuration"
 	config SOFTAP_WIFI_IP
 		depends on WIFI_SOFTAP
 		string "IP For SoftAP"
-		default "192.168.4.1"
+		default "192.168.19.1"
 		help
 			Initial IP for Soft AP mode.
 

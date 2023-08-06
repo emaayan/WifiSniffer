@@ -39,27 +39,48 @@ void onSocketAccept(const int sock, struct sockaddr_in *so_in, on_socket_accept_
 
 void onReceive(const int sock, char rx_buffer[], int len)
 {
-    ESP_LOGI(TAG, "Received %d bytes: %s", len, rx_buffer);
+    //   ESP_LOGI(TAG, "Received %d bytes: %s", len, rx_buffer);
 }
 
 // send() can return less bytes than supplied length.
 // Walk-around for robust implementation.
-bool onSend(const int sock, char buffer[], size_t len)
+// https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/wifi.html#wifi-buffer-usage
+// https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/lwip.html
+// https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/kconfig.html#config-lwip-check-thread-safety
+// https://pubs.opengroup.org/onlinepubs/007908799/xns/send.html
+bool onSend(const int sock, void *buffer, size_t len)
 {
-    size_t to_write = len;
-    while (to_write > 0)
+    ESP_LOG_BUFFER_HEXDUMP(TAG, buffer, len, ESP_LOG_INFO);
+    int e = write(sock, buffer, len);
+    if (e < 0)
     {
-        size_t pos = (len - to_write);
-        ssize_t written = send(sock, buffer + pos, to_write, 0);
-        if (written < 0)
-        {
-            ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
-            disconnect_socket(sock);
-            return false;
-        }
-        to_write -= written;
+        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+        disconnect_socket(sock);
+        return false;
     }
-    return true;
+    else
+    {
+        return true;
+    }
+    /*
+        size_t to_write = len;
+        while (to_write > 0)
+        {
+
+            size_t pos = (len - to_write);
+            ESP_LOG_BUFFER_HEXDUMP(TAG, buffer + pos, to_write, ESP_LOG_INFO);
+            ssize_t written = send(sock, buffer + pos, to_write, 0);
+            if (written < 0)
+            {
+                ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+                disconnect_socket(sock);
+                return false;
+            }
+            ESP_LOGI(TAG, "Written %d : %d", written, to_write);
+            to_write -= written;
+        }
+        return true;
+        */
 }
 
 static void tcp_server_task(void *pvParameters)
@@ -165,5 +186,6 @@ static void tcp_server_task(void *pvParameters)
 
 void start_tcp_server(tcp_server_config_t *tcp_server_config)
 {
-    xTaskCreate(tcp_server_task, "tcp_server", 4096, tcp_server_config, 5, NULL);
+    ESP_LOGI(TAG, "Starting TCP Server");
+    xTaskCreate(tcp_server_task, "tcp_server", 4096, tcp_server_config, configMAX_PRIORITIES - 20, NULL);
 }

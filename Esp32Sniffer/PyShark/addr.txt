@@ -1,0 +1,5 @@
+				addr1			addr2			addr3	
+Managment 		ra/da			ta/sa			bssid		(ra and da are broadcast)
+Data Qos		ra/bssid		ta/sa/sta		da			(sa and ta are the same)
+Data			ra/da/sta		ta/bssid		sa			(ra and da are broadcast)
+Data(nULL)		ra/da/bssid		ta/sa/sta		da			(ra and da are the same)

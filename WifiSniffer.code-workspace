@@ -10,5 +10,15 @@
 			"path": "ArduinoWifiSniffer"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"files.associations": {
+			"esp_log.h": "c",
+			"freertos.h": "c",
+			"wifi_sniffer.h": "c",
+			"stdio.h": "c",
+			"capture_lib.h": "c",
+			"sdkconfig.h": "c",
+			"errno.h": "c"
+		}
+	}
 }

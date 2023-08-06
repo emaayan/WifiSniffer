@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include "lwip/sockets.h"
 
-bool onSend(const int sock, char buffer[], size_t len);
+bool onSend(const int sock, void * buffer , size_t len);
 typedef void (* on_socket_accept_t) (const int sock, struct sockaddr_in *so_in);
 
 typedef struct

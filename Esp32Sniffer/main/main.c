@@ -10,18 +10,13 @@
 #include "nvs_flash.h"
 #include "esp_log.h"
 #include "esp_mac.h"
+#include "capture_lib.h"
 
 #include "../build/config/sdkconfig.h"
 static const char *TAG = "WifiSnifferMain";
 // https://github.com/espressif/esp-idf/blob/master/examples/common_components/protocol_examples_common/
 //  https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/esp_event.html
 //  https://www.youtube.com/watch?v=STGK2nT8S9Q
-typedef struct
-{
-    u_int16_t type;
-    int8_t *data; //[MAX_MSG_SIZE];
-    size_t size;
-} message_t;
 
 #define WRITE_BUFF 512
 int serial_write(uart_port_t port, const char *fmt, ...)
@@ -34,16 +29,33 @@ int serial_write(uart_port_t port, const char *fmt, ...)
     return r;
 }
 
-QueueHandle_t txQueue;
-QueueHandle_t createMessageQueue(size_t size)
+typedef struct
 {
-    return xQueueCreate(size, sizeof(message_t));
+    u_int16_t type;
+    int8_t *data; //[MAX_MSG_SIZE];
+    size_t size;
+} message_t;
+
+bool create_tx_queue(UBaseType_t txQSize, size_t sz, QueueHandle_t *q)
+{
+    QueueHandle_t queue = xQueueCreate(txQSize, sz); // createMessageQueue(txQSize);
+    if (!queue)
+    {
+        ESP_LOGE(TAG, "Failed to create queue");
+        return false;
+    }
+    else
+    {
+        *q = queue;
+        return true;
+    }
 }
 
-bool sendMessage(message_t *msg)
+QueueHandle_t _tx_queue;
+bool send_message(message_t *msg)
 {
     ESP_LOGI("QueueSend", "Sending Message %d, %s ", msg->size, msg->data);
-    if (xQueueSend(txQueue, msg, (TickType_t)0))
+    if (xQueueSend(_tx_queue, msg, (TickType_t)0))
     {
 
         return true;
@@ -54,10 +66,10 @@ bool sendMessage(message_t *msg)
     }
 }
 
-bool receiveMessage(message_t *msg)
+bool receive_message(message_t *msg)
 {
 
-    if (xQueueReceive(txQueue, msg, (TickType_t)0))
+    if (xQueueReceive(_tx_queue, msg, (TickType_t)0))
     {
         ESP_LOGI("QueueReceive", "Getting Message %d, %s ", msg->size, msg->data);
         return true;
@@ -80,7 +92,7 @@ void copyFromSerial2ToSerialon1(serial_messsage_t serMsg) // sample on how to se
     memcpy(msg.data, data, sz);
     msg.data[msg.size] = 0;
 
-    sendMessage(&msg);
+    send_message(&msg);
 }
 
 const size_t OP_CODE_SIZE = 2;
@@ -88,41 +100,27 @@ bool isOpCode(const char buff[], const char op[])
 {
     return !strncmp(buff, op, OP_CODE_SIZE);
 }
-bool start = false;
-typedef enum OUTPUT_TYPE
-{
-    TEXT,
-    BINARY
-} OUTPUT_TYPE_T;
-OUTPUT_TYPE_T outType = TEXT;
 
-void writePacket(const wifi_promiscuous_pkt_type_t type, wifi_promiscuous_pkt_t *pkt, wifi_mgmt_hdr *mgmt)
+void write_packet(const wifi_promiscuous_pkt_type_t type, wifi_promiscuous_pkt_t *pkt)
 {
-    if (start)
-    {
-        uint32_t sig_packetLength = pkt->rx_ctrl.sig_len;
-        if (type == WIFI_PKT_MGMT)
-        {
-            sig_packetLength -= 4;
-        }
-        uint8_t *payload = pkt->payload;
 
-        // send_msg("ADDR2=" MACSTR " , RSSI=%d ,Channel=%d ,seq=%d", MAC2STR(mgmt->sa), pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel, mgmt->seqctl & 0xFF);
-        ESP_LOGI(TAG, "ADDR2=" MACSTR " , RSSI=%d ,Channel=%d ,seq=%d", MAC2STR(mgmt->sa), pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel, mgmt->seqctl & 0xFF);
-        addPacket(sig_packetLength, payload); // send packet via Serial
-    }
+    uint32_t sig_packetLength = pkt->rx_ctrl.sig_len;
+    uint8_t *payload = pkt->payload;
+    wifi_mgmt_hdr *mgmt = sniffer_get_wifi_mgmt_hdr(pkt);
+
+    // send_msg("ADDR2=" MACSTR " , RSSI=%d ,Channel=%d ,seq=%d", MAC2STR(mgmt->sa), pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel, mgmt->seqctl & 0xFF);
+    // ESP_LOGI(TAG, "ADDR2=" MACSTR " , RSSI=%d ,Channel=%d ,seq=%d, size=%" PRIu32, MAC2STR(mgmt->ta), pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel, mgmt->seqctl & 0xFF, sig_packetLength);
+    addPacket(sig_packetLength, payload); // send packet via Serial
 }
 
 void signalStart()
 {
-    start = true;
     startCapture();
     sniffer_start();
 }
 
 void signalStop()
 {
-    start = false;
     sniffer_stop();
 }
 
@@ -134,42 +132,93 @@ void on_socket_accept_handler(const int sock, struct sockaddr_in *so_in)
     signalStart();
 }
 
+QueueHandle_t _pcap_queue;
+bool send_message_pcap(pcap_rec_t *msg)
+{
+    // ESP_LOGI(TAG, "Sending pcap Message %"PRIu32,msg->pcaprec_hdr.incl_len);
+    if (xQueueSend(_pcap_queue, msg, (TickType_t)0))
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+int on_start_capture(pcap_hdr_t pcap_hdr)
+{
+
+    if (!onSend(_sock,(void *)&pcap_hdr, sizeof(pcap_hdr)))
+    {
+        _sock = 0;
+        sniffer_stop();
+    }
+    return  sizeof(pcap_hdr);
+}
+int on_capture(pcap_rec_t pcaprec)
+{
+    
+    size_t total_size = sizeof(pcap_rec_hdr_t) + pcaprec.pcap_rec_hdr.incl_len;    
+    send_message_pcap(&pcaprec);
+    // if (!onSend(_sock,(void *)&pcaprec, total_size))
+    // {
+    //     _sock = 0;
+    //     sniffer_stop();
+    // }
+    return  total_size;
+}
+
+// static SemaphoreHandle_t socket_semp;
 int on_write(void *buffer, size_t size)
 {
     const size_t sz = size;
     int8_t *data = buffer;
     int wrote = 0; // write_serial_0(data, sz);
-    // ESP_LOG_BUFFER_HEXDUMP(TAG, data, size, ESP_LOG_DEBUG);
     if (_sock)
     {
-        if (!onSend(_sock, buffer, sz))
+        ESP_LOG_BUFFER_HEXDUMP(TAG, data, size, ESP_LOG_DEBUG);
+        pcap_rec_t *m = (pcap_rec_t *)buffer;
+        //        send_message_pcap(m);
+        size_t szp = sizeof(pcap_rec_hdr_t) + m->pcap_rec_hdr.incl_len;
+        // if (!onSend(_sock, buffer, szp))
+        // {
+        //     _sock = 0;
+        //     sniffer_stop();
+        // }
+
+        // vTaskDelay(500 / portTICK_PERIOD_MS);
+    }
+    return wrote;
+}
+
+void pcap_msg_receive_task()
+{
+    ESP_LOGI(TAG, "Pcap recieve Task");
+    while (1)
+    {
+        pcap_rec_t msg;
+        if (xQueueReceive(_pcap_queue, &msg, (TickType_t)20))
         {
-            _sock = 0;
-            sniffer_stop();
+            if (_sock)
+            {
+                size_t szp = sizeof(pcap_rec_hdr_t) + msg.pcap_rec_hdr.incl_len;
+                ESP_LOGI(TAG, "Getting PCAP Message %d, %" PRIu32 " %" PRIu32 " %" PRIu32, szp, msg.pcap_rec_hdr.ts_sec, msg.pcap_rec_hdr.ts_usec, msg.pcap_rec_hdr.incl_len);
+                // vTaskDelay(500/portTICK_PERIOD_MS);
+                if (!onSend(_sock, (void *)&msg, szp))
+                {
+                    _sock = 0;
+                    sniffer_stop();
+                }
+            }
         }
     }
-    else
-    {
-        // ESP_LOGE(TAG, "No Socket");
-    }
-
-    return wrote;
-
-    // message_t msg;
-    // msg.data = malloc((sizeof(u_int8_t) * sz) + 1); //+1 for null chachater
-    // msg.size = sz;
-    // memcpy(msg.data, data, sz);
-    // msg.data[msg.size] = 0;
-
-    // sendMessage(&msg);
 }
 
 void setBinaryOutput()
 {
-    ESP_LOGI(TAG, "Setting binary output");
-    outType = BINARY;
     signalStart();
 }
+
 int hexToDecimal(char hexChar)
 {
     if (hexChar >= '0' && hexChar <= '9')
@@ -269,7 +318,7 @@ void readMessage(serial_messsage_t msg)
             {
                 ch = 0;
             }
-            set_filter_channel(ch);
+            sniffer_set_filter_channel(ch);
         }
 
         if (isOpCode(op, "F1"))
@@ -277,7 +326,7 @@ void readMessage(serial_messsage_t msg)
             addrFilter_t filt = read_filter(op, msg);
             if (filt.size >= 0)
             {
-                setAddr1Filter(filt);
+                sniffer_set_addr3_filter(filt);
             }
         }
 
@@ -286,7 +335,7 @@ void readMessage(serial_messsage_t msg)
             addrFilter_t filt = read_filter(op, msg);
             if (filt.size >= 0)
             {
-                setAddr2Filter(filt);
+                sniffer_set_addr2_filter(filt);
             }
         }
     }
@@ -302,7 +351,7 @@ void onMsgProduce(sent_message_t *msg)
 {
     message_t msgFromQueue;
 
-    if (receiveMessage(&msgFromQueue))
+    if (receive_message(&msgFromQueue))
     {
         msg->size = msgFromQueue.size;
         memcpy(msg->data, msgFromQueue.data, msgFromQueue.size);
@@ -316,7 +365,7 @@ void onMsgProduce(sent_message_t *msg)
     // return msg.size;
 }
 
-void initSerials()
+void init_serials()
 {
     serial_begin_0(115200); // TODO: make sure this sets back 250000
     // static txConfigStruct_t txConfig = {UART_NUM_0, 100, TX_TASK_SIZE, onMsgProduce};
@@ -360,7 +409,7 @@ void init_config_wifi()
 
     char msg[50] = "";
     wifi_get_ip(msg, sizeof(msg));
-    displayPrint(0, 17, "IP: %s", msg);
+    //  displayPrint(0, 17, "IP: %s", msg);
 }
 
 #define PORT CONFIG_TCP_SERVER_PORT
@@ -370,20 +419,14 @@ void init_config_wifi()
 
 void tcp_server()
 {
+
     static tcp_server_config_t tcp_server_config = {.port = PORT, .keepIdle = KEEPALIVE_IDLE, .keepInterval = KEEPALIVE_INTERVAL, .keepCount = KEEPALIVE_COUNT, .on_socket_accept = on_socket_accept_handler};
     start_tcp_server(&tcp_server_config);
+    xTaskCreate(pcap_msg_receive_task, "pcap_receive_task", 4096, NULL, configMAX_PRIORITIES - 10, NULL);
 }
 
-void setup()
+void flash_init()
 {
-    initSerials();
-    // esp_log_set_vprintf(serial_log); // REDIRECT ALL LOGS TO another port
-
-    initDisplay();
-    //  displayPrint(0, 17, "hello %s", "world");
-
-    ESP_LOGI(TAG, "[+] Startup...");
-
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
     {
@@ -391,30 +434,36 @@ void setup()
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+}
 
+void setup()
+{
+    ESP_LOGI(TAG, "[+] Startup...");
+    flash_init();
+
+    init_serials();
+    // esp_log_set_vprintf(serial_log); // REDIRECT ALL LOGS TO another port
+    // esp_log_set_vprintf(send_v_msg);//TODO: need to solve on client side
+
+    // initDisplay();
+    // displayPrint(0, 17, "hello %s", "world");
     // ESP_ERROR_CHECK(esp_event_loop_create(event_handler, NULL)); // initialize (wifi) event handler
-
-    setWriteCb(on_write);
-    setPacketHander(writePacket);
 
     init_config_wifi();
 
     addrFilter_t ownMac = {.size = 6};
     wifi_get_mac(ownMac.addr);
-    ESP_LOGI(TAG, "MAC Address IS : " MACSTR, MAC2STR(ownMac.addr));
+    ESP_LOGI(TAG, "MAC Address Is : " MACSTR, MAC2STR(ownMac.addr));
 
-    wifi_sniffer_init_config();
-    setAddrOwnMacFilter(ownMac);
+    setWriteCb(on_write, on_start_capture, on_capture);
+    sniffer_init_config(write_packet, ownMac);
 
     static const UBaseType_t txQSize = 5;
-    txQueue = createMessageQueue(txQSize);
-    if (!txQueue)
-    {
-        printf("Failed to create queue");
-    }
-    tcp_server();
 
-    // esp_log_set_vprintf(send_v_msg);//TODO: need to solve on client side
+    create_tx_queue(txQSize, sizeof(message_t), &_tx_queue);
+    create_tx_queue(20, sizeof(pcap_rec_t), &_pcap_queue);
+
+    tcp_server();
 }
 static bool RUNNING = true;
 void loop()
@@ -428,10 +477,7 @@ void loop()
 void app_main(void)
 {
     setup();
-
     loop();
-
-    ESP_LOGW(TAG, "Deleting sniffing task...");
-    sniffer_stop();
+    // sniffer_stop();
     ESP_LOGI(TAG, "Stopped");
 }

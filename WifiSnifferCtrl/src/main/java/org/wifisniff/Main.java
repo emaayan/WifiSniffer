@@ -1,6 +1,7 @@
 package org.wifisniff;
 
 
+import org.wifisniff.capture.AbstractPacket;
 import org.wifisniff.capture.CaptureHeader;
 import org.wifisniff.capture.PayloadHeader;
 import org.wifisniff.capture.PayloadPacket;
@@ -9,16 +10,108 @@ import org.wifisniff.pipes.NamedPipeWrapper;
 import org.wifisniff.pipes.PipeException;
 import org.wifisniff.pipes.TCPWrapper;
 
+import javax.net.ServerSocketFactory;
+import javax.net.SocketFactory;
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 
 public class Main {
 
-    public static void main(String[] args) throws IOException, PipeException {
+//    public static ByteBuffer read(int length, Consumer<ByteBuffer>bb ) {
+//        final byte[] bytes = new byte[length];
+//        final int i =bb.accept(byteBuffer);
+//        if (i > 0) {
+//            byteBuffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
+//        } else {
+//            byteBuffer = ByteBuffer.allocate(0);
+//        }
+//        return byteBuffer;
+//    }
+    public static void main(String[] args) throws IOException {
+
+        String localhost = "192.168.9.217";
+
+        final int port1 = 19000;
+        while(true) {
+            try (final Socket socket = SocketFactory.getDefault().createSocket(localhost, port1)) {
+                final OutputStream outputStream = socket.getOutputStream();
+                outputStream.write(0);
+//            socket.setKeepAlive(true);
+                final int timeout = 2000;
+
+                socket.setSoTimeout(timeout);
+                final InputStream inputStream = socket.getInputStream();
+                final OutputStream out = Files.newOutputStream(Paths.get("test.pcap"));
+
+                final ByteBuffer bb = getByteBuffer(inputStream, CaptureHeader.SIZE);
+                final Optional<CaptureHeader> captureHeader = CaptureHeader.get(bb);
+                captureHeader.ifPresent(captureHeader1 -> {
+                    System.out.println(captureHeader1);
+                    try {
+                        captureHeader1.write(out);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                    while (socket.isConnected()) {
+                        try {
+                            final ByteBuffer byteBuffer = getByteBuffer(inputStream, PayloadHeader.SIZE);
+                            PayloadHeader.get(byteBuffer).ifPresent(payloadHeader -> {
+                                System.out.println(payloadHeader);
+                                try {
+                                    payloadHeader.write(out);
+                                    final ByteBuffer byteBuffer1 = getByteBuffer(inputStream, payloadHeader.getIncl_len());
+                                    PayloadPacket.get(byteBuffer1).ifPresent(payloadPacket -> {
+                                        final byte[] data = payloadPacket.getData();
+                                        System.out.println(payloadPacket+ " "+AbstractPacket.bytesToHex(data));
+                                        try {
+                                            payloadPacket.write(out);
+                                        } catch (IOException e) {
+                                            throw new RuntimeException(e);
+                                        }
+                                    });
+                                } catch (IOException e) {
+                                    throw new RuntimeException(e);
+                                }
+                            });
+
+                        } catch (SocketTimeoutException e) {
+                            e.printStackTrace();
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+
+                    }
+                });
+            }
+
+        }
+
+    }
+
+    private static ByteBuffer getByteBuffer(InputStream inputStream, int size) throws IOException {
+        final ByteBuffer allocate = ByteBuffer.allocate(size);//.order(ByteOrder.LITTLE_ENDIAN);
+        final byte[] array = allocate.array();
+        final int read = inputStream.read(array);
+        return allocate;
+    }
+
+    public static void main2(String[] args) throws IOException, PipeException {
 
         String pipeName = "\\\\.\\pipe\\wireshark";
 //        pipeName="TCP@127.0.0.1:19000";

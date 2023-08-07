@@ -5,7 +5,7 @@
 #include <inttypes.h>
 #define MAX_LENGTH 700 // 2500
 
-typedef struct pcap_hdr_s
+typedef struct pcap_capture_header
 {
     const uint32_t magic_number;
     const uint16_t version_major;
@@ -16,7 +16,7 @@ typedef struct pcap_hdr_s
     uint32_t network;        /* data link type */
 } pcap_hdr_t;
 
-typedef struct pcaprec_hdr_s
+typedef struct pcap_rec_header
 {
     const uint32_t ts_sec;   /* timestamp seconds */
     const uint32_t ts_usec;  /* timestamp microseconds */
@@ -30,13 +30,14 @@ typedef struct pcap_rec
     uint8_t buf[MAX_LENGTH];
 } __attribute__((packed)) pcap_rec_t;
 
-
-typedef int (*write_cb)(void * buffer , size_t size);
 typedef int (*on_start_capture_cb)(pcap_hdr_t pcap_hdr);
 typedef int (*on_capture_cb)(pcap_rec_t pcaprec);
-void setWriteCb(write_cb cb,on_start_capture_cb on_start_capture_cb,on_capture_cb on_capture_cb);
-void startCapture();
-int addPacket(uint32_t len, uint8_t *buf);
+void capture_set_cb(on_start_capture_cb on_start_capture_cb, on_capture_cb on_capture_cb);
+void capture_start();
+pcap_rec_hdr_t capture_create_header(uint32_t len);
+pcap_rec_t capture_create_packet(uint32_t len, uint8_t *buf);
+int capture_on_send(pcap_rec_t pcap_rec);
+int capture_add_packet(uint32_t len, uint8_t *buf);
 int send_msg(const char *fmt, ...);
 int send_v_msg(const char *fmt, va_list argptr);
 #endif /* E6048912_5A40_4391_8553_587FB73E6A4C */

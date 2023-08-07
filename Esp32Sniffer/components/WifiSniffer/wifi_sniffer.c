@@ -1,6 +1,7 @@
 #include <stdio.h>
+
 #include "wifi_sniffer.h"
-#include "../../build/config/sdkconfig.h"
+#include "capture_lib.h"
 
 #include "driver/gpio.h"
 
@@ -15,24 +16,22 @@
 #include "esp_system.h"
 #include "esp_log.h"
 #include "esp_mac.h"
+
+#include "../../build/config/sdkconfig.h"
+
 static const char *TAG = "WifiSniffer";
 
-static SemaphoreHandle_t addr_own_mac_sem;
+static SemaphoreHandle_t _filter_sem;
 static addrFilter_t addr_own_mac = {{}, 0};
-
-static SemaphoreHandle_t add2_sem;
-// static addrFilter_t addr2_filter = {{0x00, 0x0C, 0XCC}, 3};//{{}, 0}; //
- static addrFilter_t addr2_filter = {{}, 0};
-
-static SemaphoreHandle_t addr3_sem;
+static addrFilter_t addr2_filter = {{}, 0};
 static addrFilter_t addr3_filter = {{}, 0};
 
-void sniffer_set_own_mac_filter(addrFilter_t addrFilter)
+void sniffer_set_filter(addrFilter_t addrFilter, addrFilter_t *filter)
 {
-    if (xSemaphoreTake(addr_own_mac_sem, portMAX_DELAY))
+    if (xSemaphoreTake(_filter_sem, portMAX_DELAY))
     {
-        addr_own_mac = addrFilter;
-        if (!xSemaphoreGive(addr_own_mac_sem))
+        *filter = addrFilter;
+        if (!xSemaphoreGive(_filter_sem))
         {
             ESP_LOGE(TAG, "Error releaseing addrOwnMac semaphore");
         }
@@ -43,86 +42,47 @@ void sniffer_set_own_mac_filter(addrFilter_t addrFilter)
     }
 }
 
+void sniffer_set_own_mac_filter(addrFilter_t addrFilter)
+{
+    sniffer_set_filter(addrFilter, &addr_own_mac);
+}
+
 void sniffer_set_addr2_filter(addrFilter_t addrFilter)
 {
-    if (xSemaphoreTake(add2_sem, portMAX_DELAY))
-    {
-        addr2_filter = addrFilter;
-        if (!xSemaphoreGive(add2_sem))
-        {
-            ESP_LOGE(TAG, "Error releaseing addr2 semaphore");
-        }
-    }
-    else
-    {
-        ESP_LOGE(TAG, "Failed to get addr2 semaphore");
-    }
+    sniffer_set_filter(addrFilter, &addr2_filter);
 }
 void sniffer_set_addr3_filter(addrFilter_t addrFilter)
 {
-    if (xSemaphoreTake(addr3_sem, portMAX_DELAY))
-    {
-        addr3_filter = addrFilter;
-        if (!xSemaphoreGive(addr3_sem))
-        {
-            ESP_LOGE(TAG, "Error releaseing addr1 semaphore");
-        }
-    }
-    else
-    {
-        ESP_LOGE(TAG, "Failed to get addr1 semaphore");
-    }
+    sniffer_set_filter(addrFilter, &addr3_filter);
 }
 
-bool isAddrEquel(const uint8_t addr[], const addrFilter_t filter, SemaphoreHandle_t samHandle)
+bool isAddrEquel(const uint8_t addr[], const addrFilter_t filter)
 {
-    if (xSemaphoreTake(samHandle, portMAX_DELAY))
-    {
-        bool f = filter.size == 0 || !memcmp(addr, filter.addr, filter.size);
-        if (!xSemaphoreGive(samHandle))
-        {
-            ESP_LOGE(TAG, "Failed to give addr semaphore");
-        }
-        return f;
-    }
-    else
-    {
-        ESP_LOGE(TAG, "Failed filter with addr semaphore");
-        return true;
-    }
-}
-
-SemaphoreHandle_t _write_cb_sem;
-static wifiPacketHandler_t _wifiPacketHandler;
-// TODO: find out if we actually need semaphores for callbakc
-wifiPacketHandler_t sniffer_set_packet_hander(wifiPacketHandler_t wifiPacketHandler)
-{
-    if (xSemaphoreTake(_write_cb_sem, portMAX_DELAY))
-    {
-        wifiPacketHandler_t wifip = _wifiPacketHandler;
-        _wifiPacketHandler = wifiPacketHandler;
-        xSemaphoreGive(_write_cb_sem);
-        return wifip;
-    }
-    else
-    {
-        ESP_LOGE(TAG, "Failed to get Callback Semaphore");
-        return NULL;
-    }
+    bool f = filter.size == 0 || !memcmp(addr, filter.addr, filter.size);
+    return f;
 }
 
 bool filter_packet(wifi_mgmt_hdr *mgmt)
 {
-    // ESP_LOGI(TAG, "gettng Packet");
-    return !(
-       isAddrEquel(mgmt->sa, addr_own_mac, addr_own_mac_sem) 
-    || isAddrEquel(mgmt->ra, addr_own_mac, addr_own_mac_sem) 
-    || isAddrEquel(mgmt->ta, addr_own_mac, addr_own_mac_sem)
-    ) 
-    && (
-        isAddrEquel(mgmt->sa, addr3_filter, addr3_sem) 
-     && isAddrEquel(mgmt->ta, addr2_filter, add2_sem)
-    );
+    if (xSemaphoreTake(_filter_sem, portMAX_DELAY))
+    {
+        bool f = !(
+                     isAddrEquel(mgmt->sa, addr_own_mac) || isAddrEquel(mgmt->ra, addr_own_mac) || isAddrEquel(mgmt->ta, addr_own_mac)) &&
+                 (isAddrEquel(mgmt->sa, addr3_filter) && isAddrEquel(mgmt->ta, addr2_filter));
+        if (!xSemaphoreGive(_filter_sem))
+        {
+            ESP_LOGE(TAG, "Failed to give filter semaphore");
+            return f;
+        }
+        else
+        {
+            return f;
+        }
+    }
+    else
+    {
+        return true;
+    }
 }
 
 wifi_mgmt_hdr *sniffer_get_wifi_mgmt_hdr(wifi_promiscuous_pkt_t *pkt)
@@ -130,22 +90,58 @@ wifi_mgmt_hdr *sniffer_get_wifi_mgmt_hdr(wifi_promiscuous_pkt_t *pkt)
     return (wifi_mgmt_hdr *)pkt->payload;
 }
 
+static QueueHandle_t _packet_queue;
+static bool sniffer_create_queue(UBaseType_t txQSize)
+{
+    QueueHandle_t queue = xQueueCreate(txQSize, sizeof(pcap_rec_t));
+    if (!queue)
+    {
+        ESP_LOGE(TAG, "Failed to create queue");
+        return false;
+    }
+    else
+    {
+        _packet_queue = queue;
+        return true;
+    }
+}
+
+bool sniffer_add_queue(pcap_rec_t *msg)
+{
+    // ESP_LOGI(TAG, "Sending pcap Message %"PRIu32,msg->pcaprec_hdr.incl_len);
+    if (xQueueSend(_packet_queue, msg, (TickType_t)0))
+    {
+        return true;
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Queue is Full %" PRIu32, msg->pcap_rec_hdr.incl_len);
+        return false;
+    }
+}
+
+static void write_packet(const wifi_promiscuous_pkt_type_t type, wifi_promiscuous_pkt_t *pkt)
+{
+    uint32_t sig_packetLength = pkt->rx_ctrl.sig_len;
+    uint8_t *payload = pkt->payload;
+    pcap_rec_t pcap_rec = capture_create_packet(sig_packetLength, payload);
+    sniffer_add_queue(&pcap_rec);
+}
+
 void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type)
 {
     wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *)buff;
     if (type == WIFI_PKT_MGMT)
     {
-        pkt->rx_ctrl.sig_len -= 4; // sig_packetLength -= 4;
+        pkt->rx_ctrl.sig_len -= 4; // due to bug in esp-idf
     }
     wifi_mgmt_hdr *mgmt = sniffer_get_wifi_mgmt_hdr(pkt);
     const bool filter = filter_packet(mgmt);
     if (filter)
     {
         ESP_LOGD(TAG, "ADDR2=" MACSTR " , RSSI=%d ,Channel=%d ,seq=%d", MAC2STR(mgmt->ta), pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel, mgmt->seqctl & 0xFF);
-        if (_wifiPacketHandler)
-        {
-            _wifiPacketHandler(type, pkt);
-        }
+
+        write_packet(type, pkt);
     }
 }
 
@@ -222,26 +218,27 @@ void sniffer_task(void *pvParameter)
 
     ESP_LOGI(TAG, "[SNIFFER] Starting sniffing mode...");
     wifi_sniffer_init(*cfg);
-
+    capture_start();
     while (true)
     {
 
-        vTaskDelay(sleep_time / portTICK_PERIOD_MS);
+        pcap_rec_t msg;
+        if (xQueueReceive(_packet_queue, &msg, (TickType_t)20))
+        {
+            capture_on_send(msg);
+        }
         // if (filter_channel == 0)
         // {
         //     switchChannels();
         // }
     }
 }
-
-void sniffer_init_config(wifiPacketHandler_t wifiPacketHandler, addrFilter_t ownMac)
+#define queue_size 20
+void sniffer_init_config(addrFilter_t ownMac)
 {
-    _write_cb_sem = xSemaphoreCreateMutex();
-    addr3_sem = xSemaphoreCreateMutex();
-    add2_sem = xSemaphoreCreateMutex();
-    addr_own_mac_sem = xSemaphoreCreateMutex();
+    sniffer_create_queue(queue_size);
+    _filter_sem = xSemaphoreCreateMutex();
     filter_channel = 1;
-    sniffer_set_packet_hander(wifiPacketHandler);
     sniffer_set_own_mac_filter(ownMac);
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(wifi_sniffer_packet_handler)); // callback function
 }

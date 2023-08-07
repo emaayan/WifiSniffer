@@ -161,7 +161,7 @@ void newPacket(uint32_t ts_sec, uint32_t ts_usec, uint32_t len, uint8_t *buf)
 
   write(buf, incl_len);
 }
-void startCapture()
+void capture_start()
 {
   write32(magic_number);
   write16(version_major);

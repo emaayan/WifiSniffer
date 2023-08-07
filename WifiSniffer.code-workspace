@@ -18,7 +18,13 @@
 			"stdio.h": "c",
 			"capture_lib.h": "c",
 			"sdkconfig.h": "c",
-			"errno.h": "c"
+			"errno.h": "c",
+			"time.h": "c",
+			"oleddisplayutils.h": "c",
+			"wifi_lib.h": "c",
+			"tcp_server.h": "c",
+			"seriallib.h": "c",
+			"esp_mac.h": "c"
 		}
 	}
 }

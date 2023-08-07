@@ -13,7 +13,7 @@
 static const char *TAG = "TcpServer";
 // https://docs.espressif.com/projects/esp-idf/en/v5.0.1/esp32/api-guides/lwip.html?highlight=shutdown#socket-error-handling
 // https://esp32developer.com/programming-in-c-c/tcp-ip/tcp-server
-// TODO: READ MORE ON SOCKET ERROR HANDLING
+
 #define SD_BOTH 2
 void disconnect_socket(int sock)
 {
@@ -50,7 +50,7 @@ void onReceive(const int sock, char rx_buffer[], int len)
 // https://pubs.opengroup.org/onlinepubs/007908799/xns/send.html
 bool onSend(const int sock, void *buffer, size_t len)
 {
-    ESP_LOG_BUFFER_HEXDUMP(TAG, buffer, len, ESP_LOG_INFO);
+    ESP_LOG_BUFFER_HEXDUMP(TAG, buffer, len, ESP_LOG_DEBUG);
     int e = write(sock, buffer, len);
     if (e < 0)
     {
@@ -61,26 +61,7 @@ bool onSend(const int sock, void *buffer, size_t len)
     else
     {
         return true;
-    }
-    /*
-        size_t to_write = len;
-        while (to_write > 0)
-        {
-
-            size_t pos = (len - to_write);
-            ESP_LOG_BUFFER_HEXDUMP(TAG, buffer + pos, to_write, ESP_LOG_INFO);
-            ssize_t written = send(sock, buffer + pos, to_write, 0);
-            if (written < 0)
-            {
-                ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
-                disconnect_socket(sock);
-                return false;
-            }
-            ESP_LOGI(TAG, "Written %d : %d", written, to_write);
-            to_write -= written;
-        }
-        return true;
-        */
+    }   
 }
 
 static void tcp_server_task(void *pvParameters)

@@ -1,4 +1,4 @@
-menu "Snifer Configuration"
+menu "Sniffer Configuration"
 
 	choice WIFI_CONNECT_METHOD
 		prompt "Wifi Connectiom Method"

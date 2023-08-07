@@ -107,13 +107,13 @@ void packet_cb(wifi_promiscuous_pkt_type_t type, const wifi_promiscuous_pkt_t *p
   }
 }
 
-void signalStart()
+void signal_start()
 {
 
   if (outType == BINARY)
   {
     // Serial.println("<<START>>");
-    startCapture();
+    capture_start();
   }
   if (outType == TEXT)
   {
@@ -133,7 +133,7 @@ void initSerial()
   Serial.begin(BUAD);
   // delay(2000);
 
-   signalStart();
+   signal_start();
 }
 void writeSerial(const uint8_t buffer[], size_t size)
 {
@@ -172,7 +172,7 @@ void filterChannel(int ch)
   wifi_sniffer_set_channel(selChannel);
 }
 
-int hexToDecimal(char hexChar)
+int hex_to_decimal(char hexChar)
 {
   if (hexChar >= '0' && hexChar <= '9')
     return hexChar - '0';
@@ -184,13 +184,13 @@ int hexToDecimal(char hexChar)
     return -1; // Invalid character
 }
 
-size_t hexToByteArray(const char *hexArray, size_t hexLength, uint8_t byteArray[])
+size_t hex_to_byte_array(const char *hexArray, size_t hexLength, uint8_t byteArray[])
 {
   size_t i;
   for (i = 0; i < hexLength / 2; i++)
   {
-    int highNibble = hexToDecimal(hexArray[i * 2]);
-    int lowNibble = hexToDecimal(hexArray[i * 2 + 1]);
+    int highNibble = hex_to_decimal(hexArray[i * 2]);
+    int lowNibble = hex_to_decimal(hexArray[i * 2 + 1]);
 
     if (highNibble == -1 || lowNibble == -1)
     {
@@ -226,7 +226,7 @@ addrFilter filterAddr(char mac[], const size_t readBytes)
     if (readBytes % 2 == 0)
     {
       log("\nread filter %s", mac);
-      size_t t = hexToByteArray(mac, readBytes, filter.addr);
+      size_t t = hex_to_byte_array(mac, readBytes, filter.addr);
       filter.size = t;
       printAddrFilter(filter);
     }
@@ -267,18 +267,18 @@ void read()
 
     if (isOpCode(op, "S1"))
     {      
-      signalStart();
+      signal_start();
     }
 
     if (isOpCode(op, "OT"))
     {
       outType = TEXT;
-      signalStart();
+      signal_start();
     }
     if (isOpCode(op, "OB"))
     {
       outType = BINARY;
-      signalStart();
+      signal_start();
     }
     if (isOpCode(op, "FC"))
     {

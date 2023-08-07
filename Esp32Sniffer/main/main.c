@@ -13,6 +13,7 @@
 #include "capture_lib.h"
 
 #include "../build/config/sdkconfig.h"
+
 static const char *TAG = "WifiSnifferMain";
 // https://github.com/espressif/esp-idf/blob/master/examples/common_components/protocol_examples_common/
 //  https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/esp_event.html
@@ -95,31 +96,12 @@ void copyFromSerial2ToSerialon1(serial_messsage_t serMsg) // sample on how to se
     send_message(&msg);
 }
 
-const size_t OP_CODE_SIZE = 2;
-bool isOpCode(const char buff[], const char op[])
+void signal_start()
 {
-    return !strncmp(buff, op, OP_CODE_SIZE);
-}
-
-void write_packet(const wifi_promiscuous_pkt_type_t type, wifi_promiscuous_pkt_t *pkt)
-{
-
-    uint32_t sig_packetLength = pkt->rx_ctrl.sig_len;
-    uint8_t *payload = pkt->payload;
-    wifi_mgmt_hdr *mgmt = sniffer_get_wifi_mgmt_hdr(pkt);
-
-    // send_msg("ADDR2=" MACSTR " , RSSI=%d ,Channel=%d ,seq=%d", MAC2STR(mgmt->sa), pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel, mgmt->seqctl & 0xFF);
-    // ESP_LOGI(TAG, "ADDR2=" MACSTR " , RSSI=%d ,Channel=%d ,seq=%d, size=%" PRIu32, MAC2STR(mgmt->ta), pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel, mgmt->seqctl & 0xFF, sig_packetLength);
-    addPacket(sig_packetLength, payload); // send packet via Serial
-}
-
-void signalStart()
-{
-    startCapture();
     sniffer_start();
 }
 
-void signalStop()
+void signal_stop()
 {
     sniffer_stop();
 }
@@ -129,97 +111,34 @@ void on_socket_accept_handler(const int sock, struct sockaddr_in *so_in)
 {
     disconnect_socket(_sock);
     _sock = sock;
-    signalStart();
+    signal_start();
 }
 
-QueueHandle_t _pcap_queue;
-bool send_message_pcap(pcap_rec_t *msg)
-{
-    // ESP_LOGI(TAG, "Sending pcap Message %"PRIu32,msg->pcaprec_hdr.incl_len);
-    if (xQueueSend(_pcap_queue, msg, (TickType_t)0))
-    {
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
+
 int on_start_capture(pcap_hdr_t pcap_hdr)
 {
 
-    if (!onSend(_sock,(void *)&pcap_hdr, sizeof(pcap_hdr)))
+    if (!onSend(_sock, (void *)&pcap_hdr, sizeof(pcap_hdr)))
     {
         _sock = 0;
         sniffer_stop();
     }
-    return  sizeof(pcap_hdr);
+    return sizeof(pcap_hdr);
 }
+
 int on_capture(pcap_rec_t pcaprec)
 {
-    
     size_t total_size = sizeof(pcap_rec_hdr_t) + pcaprec.pcap_rec_hdr.incl_len;    
-    send_message_pcap(&pcaprec);
-    // if (!onSend(_sock,(void *)&pcaprec, total_size))
-    // {
-    //     _sock = 0;
-    //     sniffer_stop();
-    // }
-    return  total_size;
-}
-
-// static SemaphoreHandle_t socket_semp;
-int on_write(void *buffer, size_t size)
-{
-    const size_t sz = size;
-    int8_t *data = buffer;
-    int wrote = 0; // write_serial_0(data, sz);
-    if (_sock)
+    if (!onSend(_sock,(void *)&pcaprec, total_size))
     {
-        ESP_LOG_BUFFER_HEXDUMP(TAG, data, size, ESP_LOG_DEBUG);
-        pcap_rec_t *m = (pcap_rec_t *)buffer;
-        //        send_message_pcap(m);
-        size_t szp = sizeof(pcap_rec_hdr_t) + m->pcap_rec_hdr.incl_len;
-        // if (!onSend(_sock, buffer, szp))
-        // {
-        //     _sock = 0;
-        //     sniffer_stop();
-        // }
-
-        // vTaskDelay(500 / portTICK_PERIOD_MS);
+        _sock = 0;
+        sniffer_stop();
     }
-    return wrote;
+    return total_size;
 }
 
-void pcap_msg_receive_task()
-{
-    ESP_LOGI(TAG, "Pcap recieve Task");
-    while (1)
-    {
-        pcap_rec_t msg;
-        if (xQueueReceive(_pcap_queue, &msg, (TickType_t)20))
-        {
-            if (_sock)
-            {
-                size_t szp = sizeof(pcap_rec_hdr_t) + msg.pcap_rec_hdr.incl_len;
-                ESP_LOGI(TAG, "Getting PCAP Message %d, %" PRIu32 " %" PRIu32 " %" PRIu32, szp, msg.pcap_rec_hdr.ts_sec, msg.pcap_rec_hdr.ts_usec, msg.pcap_rec_hdr.incl_len);
-                // vTaskDelay(500/portTICK_PERIOD_MS);
-                if (!onSend(_sock, (void *)&msg, szp))
-                {
-                    _sock = 0;
-                    sniffer_stop();
-                }
-            }
-        }
-    }
-}
 
-void setBinaryOutput()
-{
-    signalStart();
-}
-
-int hexToDecimal(char hexChar)
+static int hex_to_decimal(char hexChar)
 {
     if (hexChar >= '0' && hexChar <= '9')
         return hexChar - '0';
@@ -231,13 +150,13 @@ int hexToDecimal(char hexChar)
         return -1; // Invalid character
 }
 
-size_t hexToByteArray(const char *hexArray, size_t hexLength, uint8_t byteArray[])
+static size_t hex_to_byte_array(const char *hexArray, size_t hexLength, uint8_t byteArray[])
 {
     size_t i;
     for (i = 0; i < hexLength / 2; i++)
     {
-        int highNibble = hexToDecimal(hexArray[i * 2]);
-        int lowNibble = hexToDecimal(hexArray[i * 2 + 1]);
+        int highNibble = hex_to_decimal(hexArray[i * 2]);
+        int lowNibble = hex_to_decimal(hexArray[i * 2 + 1]);
 
         if (highNibble == -1 || lowNibble == -1)
         {
@@ -260,7 +179,7 @@ addrFilter_t filterAddr(char mac[], const size_t readBytes)
         if (readBytes % 2 == 0)
         {
             ESP_LOGI(TAG, "read filter %s bytes read,%d", mac, readBytes);
-            size_t t = hexToByteArray(mac, readBytes, filter.addr);
+            size_t t = hex_to_byte_array(mac, readBytes, filter.addr);
             filter.size = t;
             ESP_LOG_BUFFER_HEX(TAG, filter.addr, filter.size);
         }
@@ -285,6 +204,12 @@ addrFilter_t read_filter(char *op, serial_messsage_t msg)
     return filt;
 }
 
+const size_t OP_CODE_SIZE = 2;
+bool isOpCode(const char buff[], const char op[])
+{
+    return !strncmp(buff, op, OP_CODE_SIZE);
+}
+
 void readMessage(serial_messsage_t msg)
 {
 
@@ -296,15 +221,15 @@ void readMessage(serial_messsage_t msg)
         if (isOpCode(op, "S0"))
         {
             ESP_LOGI(TAG, "Got stop capture");
-            signalStop();
+            signal_stop();
         }
 
         if (isOpCode(op, "S1"))
         {
             ESP_LOGI(TAG, "Got Start capture");
-            signalStart();
+            signal_start();
         }
-        if (isOpCode(op, "FC"))
+        if (isOpCode(op, "FC"))//SHOULD ONLY HAPPEN ON SERIAL
         {
             const size_t sz = msg.size - 2;
             int ch;
@@ -321,7 +246,7 @@ void readMessage(serial_messsage_t msg)
             sniffer_set_filter_channel(ch);
         }
 
-        if (isOpCode(op, "F1"))
+        if (isOpCode(op, "F3"))
         {
             addrFilter_t filt = read_filter(op, msg);
             if (filt.size >= 0)
@@ -421,8 +346,7 @@ void tcp_server()
 {
 
     static tcp_server_config_t tcp_server_config = {.port = PORT, .keepIdle = KEEPALIVE_IDLE, .keepInterval = KEEPALIVE_INTERVAL, .keepCount = KEEPALIVE_COUNT, .on_socket_accept = on_socket_accept_handler};
-    start_tcp_server(&tcp_server_config);
-    xTaskCreate(pcap_msg_receive_task, "pcap_receive_task", 4096, NULL, configMAX_PRIORITIES - 10, NULL);
+    start_tcp_server(&tcp_server_config);    
 }
 
 void flash_init()
@@ -455,29 +379,22 @@ void setup()
     wifi_get_mac(ownMac.addr);
     ESP_LOGI(TAG, "MAC Address Is : " MACSTR, MAC2STR(ownMac.addr));
 
-    setWriteCb(on_write, on_start_capture, on_capture);
-    sniffer_init_config(write_packet, ownMac);
+    capture_set_cb(on_start_capture, on_capture);
+    sniffer_init_config(ownMac);
+
+    // addrFilter_t f={{0x00, 0x0C, 0XCC}, 3};
+    addrFilter_t f={{}, 0};
+    sniffer_set_addr2_filter(f);
 
     static const UBaseType_t txQSize = 5;
-
     create_tx_queue(txQSize, sizeof(message_t), &_tx_queue);
-    create_tx_queue(20, sizeof(pcap_rec_t), &_pcap_queue);
 
     tcp_server();
 }
-static bool RUNNING = true;
-void loop()
-{
-    while (RUNNING)
-    { // every 0.5s check if fatal error occurred
-        vTaskDelay(500 / portTICK_PERIOD_MS);
-    }
-}
+
 
 void app_main(void)
 {
-    setup();
-    loop();
-    // sniffer_stop();
+    setup(); 
     ESP_LOGI(TAG, "Stopped");
 }

@@ -32,13 +32,11 @@ typedef struct
     uint8_t *payload; // network data(includes addr4)
 } __attribute__((packed)) wifi_mgmt_hdr;
 
-typedef void (*wifiPacketHandler_t)(const wifi_promiscuous_pkt_type_t type, wifi_promiscuous_pkt_t *ppkt);
-wifiPacketHandler_t sniffer_set_packet_hander(wifiPacketHandler_t wifiPacketHandler);
 
 void sniffer_set_own_mac_filter(addrFilter_t addrFilter);
 void sniffer_set_addr2_filter(addrFilter_t addrFilter);
 void sniffer_set_addr3_filter(addrFilter_t addrFilter);
-void sniffer_init_config(wifiPacketHandler_t wifiPacketHandler,addrFilter_t ownMac);
+void sniffer_init_config(addrFilter_t ownMac);
 // void wifi_sniffer_init();
 void sniffer_set_filter_channel(uint8_t channel);
 // void wifi_sniffer_deinit();

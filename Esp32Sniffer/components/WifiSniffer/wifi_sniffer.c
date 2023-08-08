@@ -115,7 +115,7 @@ bool sniffer_add_queue(pcap_rec_t *msg)
     }
     else
     {
-        ESP_LOGE(TAG, "Queue is Full %" PRIu32, msg->pcap_rec_hdr.incl_len);
+        ESP_LOGE(TAG, "Queue is Full");
         return false;
     }
 }
@@ -233,7 +233,7 @@ void sniffer_task(void *pvParameter)
         // }
     }
 }
-#define queue_size 20
+#define queue_size CONFIG_SNIFFER_QUEUE_SIZE
 void sniffer_init_config(addrFilter_t ownMac)
 {
     sniffer_create_queue(queue_size);
@@ -243,12 +243,12 @@ void sniffer_init_config(addrFilter_t ownMac)
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(wifi_sniffer_packet_handler)); // callback function
 }
 
-#define SNIFFER_STACK_SIZE 10000
+
 TaskHandle_t xHandle_sniff = NULL;
 void sniffer_start()
 {
     // wifi_sniffer_init();
-    xTaskCreate(&sniffer_task, "sniffig_task", SNIFFER_STACK_SIZE, &snifConfig, 1, &xHandle_sniff);
+    xTaskCreate(&sniffer_task, "sniffig_task",configMINIMAL_STACK_SIZE*8, &snifConfig, 1, &xHandle_sniff);
 }
 
 void sniffer_stop()

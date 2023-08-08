@@ -3,7 +3,8 @@
 
 #include <stdio.h>
 #include <inttypes.h>
-#define MAX_LENGTH 700 // 2500
+#include "../../build/config/sdkconfig.h"
+#define MAX_LENGTH CONFIG_SNIFFER_SNAP_LEN // 2500
 
 typedef struct pcap_capture_header
 {

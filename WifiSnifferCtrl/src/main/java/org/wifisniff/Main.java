@@ -43,7 +43,7 @@ public class Main {
 //        }
 //        return byteBuffer;
 //    }
-    public static void main(String[] args) throws IOException {
+    public static void main_8(String[] args) throws IOException {
 
         String localhost = "192.168.9.217";
 
@@ -111,14 +111,15 @@ public class Main {
         return allocate;
     }
 
-    public static void main2(String[] args) throws IOException, PipeException {
+    public static void main(String[] args) throws IOException, PipeException {
 
         String pipeName = "\\\\.\\pipe\\wireshark";
 //        pipeName="TCP@127.0.0.1:19000";
 //        pipeName="TCP@127.0.0.1";
-        final int speed = 250000;//912600;
-        final String port = "COM7";
+        final int speed =912600;//912600;//115200;// 250000;//912600;
+        final String port = "COM6";
 
+      //  final ConnectionWrapper namedPipeWrapper = ConnectionWrapper.NULL_WRAPPER;// new NamedPipeWrapper(pipeName);
         final ConnectionWrapper namedPipeWrapper = new NamedPipeWrapper(pipeName);
         launchWireshark(pipeName);
         namedPipeWrapper.connect();
@@ -229,9 +230,7 @@ public class Main {
     }
 
     private static void launchWireshark(String pipeName) throws IOException {
-//https://github.com/espressif/esp-idf/blob/master/examples/protocols/sockets/tcp_server/main/tcp_server.c
-//TODO: capture the process handl
-//TODO: check to see if we can use TCP settings!!! https://wiki.wireshark.org/CaptureSetup/Pipes#tcp-socket
+        //TODO: capture the process handl
         //https://randomnerdtutorials.com/esp32-access-point-ap-web-server/
         final String wiresharkExec = "C:\\Program Files\\Wireshark\\Wireshark.exe";
         final ProcessBuilder processBuilder = new ProcessBuilder(wiresharkExec, "-i" + pipeName, "-k");

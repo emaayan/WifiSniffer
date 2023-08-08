@@ -1,5 +1,19 @@
 menu "Sniffer Configuration"
 
+	config SNIFFER_QUEUE_SIZE
+		int "QueueSize"
+		range 30 500
+		default 30
+		help
+			Sniffer Queue Size
+
+	config SNIFFER_SNAP_LEN
+		int "SnapLen"
+		range 200 2500
+		default 700
+		help
+			Sniffer Maximum Packet Szie
+
 	choice WIFI_CONNECT_METHOD
 		prompt "Wifi Connectiom Method"
 		default WIFI_SOFTAP

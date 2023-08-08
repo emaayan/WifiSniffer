@@ -168,5 +168,5 @@ static void tcp_server_task(void *pvParameters)
 void start_tcp_server(tcp_server_config_t *tcp_server_config)
 {
     ESP_LOGI(TAG, "Starting TCP Server");
-    xTaskCreate(tcp_server_task, "tcp_server", 4096, tcp_server_config, configMAX_PRIORITIES - 20, NULL);
+    xTaskCreate(tcp_server_task, "tcp_server", configMINIMAL_STACK_SIZE *6, tcp_server_config, configMAX_PRIORITIES - 20, NULL);
 }

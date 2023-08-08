@@ -46,11 +46,11 @@ void serial_begin_2(int baud)
 {
     serial_begin(UART_NUM_2, GPIO_NUM_17, GPIO_NUM_16, baud);
 }
-int write_serial_0(const int8_t *src, size_t size)
+int serial_write_0(const int8_t *src, size_t size)
 {
     return uart_write_bytes(UART_NUM_0, src, size);
 }
-int write_serial_2(const int8_t *src, size_t size)
+int serial_write_2(const int8_t *src, size_t size)
 {
     return uart_write_bytes(UART_NUM_2, src, size);
 }

@@ -3,7 +3,7 @@
 
 #include "driver/uart.h"
 
-#define LOG_PORT UART_NUM_2
+#define LOG_PORT UART_NUM_0
 #define LOG_LINE_SZ 200
 int serial_v_write(uart_port_t port, char buffer[], size_t sz, const char *fmt, va_list argptr);
 int serial_log(const char *fmt, va_list argptr);
@@ -34,7 +34,7 @@ typedef struct
 void createTxTask(txConfigStruct_t *txConfiguration);
 
 #define RX_SZ 50
-#define RX_TASK_SIZE configMINIMAL_STACK_SIZE *4
+#define RX_TASK_SIZE configMINIMAL_STACK_SIZE *5
 
 typedef struct
 {

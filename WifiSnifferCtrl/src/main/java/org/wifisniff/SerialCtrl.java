@@ -1,6 +1,7 @@
 package org.wifisniff;
 
 import com.fazecast.jSerialComm.SerialPort;
+import org.wifisniff.capture.AbstractPacket;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
@@ -46,9 +47,13 @@ public class SerialCtrl implements Closeable {
     public ByteBuffer read(int length) {
         final byte[] bytes = new byte[length];
         final ByteBuffer byteBuffer;
-        final int i = serialPort.readBytes(bytes, bytes.length);
+        int i=0;
+        while(i==0){
+            i=serialPort.readBytes(bytes, bytes.length);
+        }
         if (i > 0) {
             byteBuffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
+         //   System.out.println(AbstractPacket.bytesToHex(byteBuffer));
         } else {
             byteBuffer = ByteBuffer.allocate(0);
         }

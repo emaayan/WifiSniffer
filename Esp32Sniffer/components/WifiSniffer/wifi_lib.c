@@ -265,6 +265,7 @@ void wifi_softAP(const ssid_cfg_t ssid_cfg, uint8_t channel, const char *ip_addr
         ESP_LOGE(TAG, "UNEXPECTED EVENT %" PRIu32, bits);
     }
 }
+
 void wifi_sta(const ssid_cfg_t ssid_cfg_sta)
 {
     ESP_LOGI(TAG, "Setting STA mode");

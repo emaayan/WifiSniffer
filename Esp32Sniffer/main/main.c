@@ -20,89 +20,38 @@ static const char *TAG = "WifiSnifferMain";
 //  https://www.youtube.com/watch?v=STGK2nT8S9Q
 
 #define WRITE_BUFF 512
-int serial_write(uart_port_t port, const char *fmt, ...)
+bool custom_serial = false;
+int send_log(const char *fmt, va_list argptr)
 {
-    va_list argptr;
-    va_start(argptr, fmt);
-    char buff[WRITE_BUFF] = "";
-    int r = serial_v_write(port, buff, sizeof(buff), fmt, argptr);
-    va_end(argptr);
-    return r;
-}
 
-typedef struct
-{
-    u_int16_t type;
-    int8_t *data; //[MAX_MSG_SIZE];
-    size_t size;
-} message_t;
-
-bool create_tx_queue(UBaseType_t txQSize, size_t sz, QueueHandle_t *q)
-{
-    QueueHandle_t queue = xQueueCreate(txQSize, sz); // createMessageQueue(txQSize);
-    if (!queue)
+    char buff[256] = "";
+    size_t sz = vsnprintf(buff, sizeof(buff), fmt, argptr);
+    int txBytes;
+    if (custom_serial)
     {
-        ESP_LOGE(TAG, "Failed to create queue");
-        return false;
+        log_hdr_t h = {.fctl = 0xFC, .duration = 0, .ra = {}, .sa = {}, .ta = {}, .seqctl = 0, .payload = {}};
+        memcpy(h.payload, buff, sz);
+        pcap_rec_t pcap_rec = capture_create_packet(sz, (uint8_t *)&h);
+        txBytes = serial_write_2((void *)&pcap_rec, pcap_rec.pcap_rec_hdr.incl_len);
     }
     else
     {
-        *q = queue;
-        return true;
+        txBytes = serial_write_2((int8_t*)buff, sz);
     }
+    return txBytes;
 }
 
-QueueHandle_t _tx_queue;
-bool send_message(message_t *msg)
-{
-    ESP_LOGI("QueueSend", "Sending Message %d, %s ", msg->size, msg->data);
-    if (xQueueSend(_tx_queue, msg, (TickType_t)0))
-    {
-
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
-
-bool receive_message(message_t *msg)
-{
-
-    if (xQueueReceive(_tx_queue, msg, (TickType_t)0))
-    {
-        ESP_LOGI("QueueReceive", "Getting Message %d, %s ", msg->size, msg->data);
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
-
-void copyFromSerial2ToSerialon1(serial_messsage_t serMsg) // sample on how to send messsage
-{
-
-    const size_t sz = serMsg.size;
-    int8_t *data = serMsg.data;
-
-    message_t msg;
-    msg.data = malloc((sizeof(u_int8_t) * sz) + 1); //+1 for null chachater
-    msg.size = sz;
-    memcpy(msg.data, data, sz);
-    msg.data[msg.size] = 0;
-
-    send_message(&msg);
-}
-
+bool serialConnected = false;
 void signal_start()
 {
+    serialConnected = true;
+    custom_serial=true;
     sniffer_start();
 }
 
 void signal_stop()
 {
+    serialConnected = false;
     sniffer_stop();
 }
 
@@ -111,7 +60,19 @@ void on_socket_accept_handler(const int sock, struct sockaddr_in *so_in)
 {
     disconnect_socket(_sock);
     _sock = sock;
-    signal_start(); // TODO: what happens if signal_start called twice (once from socket)
+    sniffer_start(); // TODO: what happens if signal_start called twice (once from socket)
+}
+
+int send_serial(const int8_t *src, size_t size)
+{
+    if (serialConnected)
+    {
+        return serial_write_0(src, size);
+    }
+    else
+    {
+        return 0;
+    }
 }
 
 int on_start_capture(pcap_hdr_t pcap_hdr)
@@ -127,16 +88,15 @@ int on_start_capture(pcap_hdr_t pcap_hdr)
         }
     }
 
-    sz=serial_write_2(msg, sz);
+    sz = send_serial(msg, sz);
 
     return sz;
 }
 
-int on_capture(pcap_rec_t pcaprec)
+int on_capture(pcap_rec_t pcap_rec, size_t total_size)
 {
-    void *msg = &pcaprec;
-    size_t total_size = sizeof(pcap_rec_hdr_t) + pcaprec.pcap_rec_hdr.incl_len;
-    if (_sock)
+    void *msg = &pcap_rec;
+    if (_sock && pcap_rec.pcap_rec_hdr.orig_len > 0)
     {
         if (!onSend(_sock, msg, total_size))
         {
@@ -144,41 +104,9 @@ int on_capture(pcap_rec_t pcaprec)
             sniffer_stop();
         }
     }
-    serial_write_2(msg, total_size);
+
+    send_serial(msg, total_size);
     return total_size;
-}
-
-static int hex_to_decimal(char hexChar)
-{
-    if (hexChar >= '0' && hexChar <= '9')
-        return hexChar - '0';
-    else if (hexChar >= 'a' && hexChar <= 'f')
-        return hexChar - 'a' + 10;
-    else if (hexChar >= 'A' && hexChar <= 'F')
-        return hexChar - 'A' + 10;
-    else
-        return -1; // Invalid character
-}
-
-static size_t hex_to_byte_array(const char *hexArray, size_t hexLength, uint8_t byteArray[])
-{
-    size_t i;
-    for (i = 0; i < hexLength / 2; i++)
-    {
-        int highNibble = hex_to_decimal(hexArray[i * 2]);
-        int lowNibble = hex_to_decimal(hexArray[i * 2 + 1]);
-
-        if (highNibble == -1 || lowNibble == -1)
-        {
-            ESP_LOGE(TAG, "Invalid hexadecimal character");
-            return -1;
-        }
-        else
-        {
-            byteArray[i] = (unsigned char)((highNibble << 4) | lowNibble);
-        }
-    }
-    return i;
 }
 
 addrFilter_t filterAddr(char mac[], const size_t readBytes)
@@ -227,7 +155,7 @@ void readMessage(serial_messsage_t msg)
     {
 
         char *op = (char *)msg.data;
-        ESP_LOGI(TAG, "Got %s %d ", op, msg.size);
+        ESP_LOGD(TAG, "Got %s %d ", op, msg.size);
         if (isOpCode(op, "S0"))
         {
             ESP_LOGI(TAG, "Got stop capture");
@@ -236,7 +164,7 @@ void readMessage(serial_messsage_t msg)
 
         if (isOpCode(op, "S1"))
         {
-            ESP_LOGI(TAG, "Got Start capture");
+            ESP_LOGD(TAG, "Got Start capture");
             signal_start();
         }
         if (isOpCode(op, "FC")) // SHOULD ONLY HAPPEN ON SERIAL
@@ -278,37 +206,21 @@ void readMessage(serial_messsage_t msg)
 
 void on_serial_read(serial_messsage_t serMsg)
 {
-    ESP_LOGI(TAG, "port: %d,Data  %s ", serMsg.srcPort, serMsg.data);
+    ESP_LOGD(TAG, "port: %d,Data  %s ", serMsg.srcPort, serMsg.data);
     readMessage(serMsg);
 }
 
-void onMsgProduce(sent_message_t *msg)
-{
-    message_t msgFromQueue;
-
-    if (receive_message(&msgFromQueue))
-    {
-        msg->size = msgFromQueue.size;
-        memcpy(msg->data, msgFromQueue.data, msgFromQueue.size);
-
-        free(msgFromQueue.data);
-        ESP_LOGI(TAG, "Msg Size %d", msg->size);
-    }
-    else
-    {
-    }
-    // return msg.size;
-}
-
+// TODO: get back serial to port 0, but make sure to use headers to mark data as data
 void init_serials()
 {
     serial_begin_0(115200); // TODO: make sure this sets back 250000
     // static txConfigStruct_t txConfig = {UART_NUM_0, 100, TX_TASK_SIZE, onMsgProduce};
     //  createTxTask(&txConfig);
 
-    serial_begin_2(912600);//115200
-    static rxConfigStruct_t rxConfig = {.port= UART_NUM_2,.wait= 10,.taskSize= RX_TASK_SIZE,.serial_reader= on_serial_read};
-    createRxTask(&rxConfig);
+     serial_begin_2(115200); // 115200
+     
+    static rxConfigStruct_t rxConfig = {.port = UART_NUM_0, .wait = 10, .taskSize = RX_TASK_SIZE, .serial_reader = on_serial_read};
+     createRxTask(&rxConfig);
 }
 
 #ifdef CONFIG_WIFI_SOFTAP
@@ -376,8 +288,8 @@ void setup()
     flash_init();
 
     init_serials();
-//   esp_log_set_vprintf(serial_log); // REDIRECT ALL LOGS TO another port
-//    // esp_log_set_vprintf(send_v_msg);//TODO: need to solve on client side
+
+     esp_log_set_vprintf(send_log); // TODO: need to solve on client side
 
     // initDisplay();
     // displayPrint(0, 17, "hello %s", "world");
@@ -396,14 +308,10 @@ void setup()
     addrFilter_t f = {{}, 0};
     sniffer_set_addr2_filter(f);
 
-    static const UBaseType_t txQSize = 5;
-    create_tx_queue(txQSize, sizeof(message_t), &_tx_queue);
-
     tcp_server();
 }
 
 void app_main(void)
 {
     setup();
-    ESP_LOGI(TAG, "Stopped");
 }

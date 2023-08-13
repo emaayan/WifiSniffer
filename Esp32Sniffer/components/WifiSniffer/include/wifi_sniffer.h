@@ -30,17 +30,25 @@ typedef struct
     uint8_t sa[6];    // filtering/source Address address BSSID in data (addr3)
     int16_t seqctl;   // sequence control
     uint8_t *payload; // network data(includes addr4)
-} __attribute__((packed)) wifi_mgmt_hdr;
+} __attribute__((packed)) wifi_mgmt_hdr_t;
+
+typedef struct//any change in fields above need to change here
+{
+    int16_t fctl;     
+    int16_t duration; 
+    uint8_t ra[6];    
+    uint8_t ta[6];    
+    uint8_t sa[6];    
+    int16_t seqctl;   
+    uint8_t payload[100]; // place for actuall log
+} __attribute__((packed)) log_hdr_t;
 
 
 void sniffer_set_own_mac_filter(addrFilter_t addrFilter);
 void sniffer_set_addr2_filter(addrFilter_t addrFilter);
 void sniffer_set_addr3_filter(addrFilter_t addrFilter);
 void sniffer_init_config(addrFilter_t ownMac);
-// void wifi_sniffer_init();
 void sniffer_set_filter_channel(uint8_t channel);
-// void wifi_sniffer_deinit();
 void sniffer_start();
 void sniffer_stop();
-wifi_mgmt_hdr * sniffer_get_wifi_mgmt_hdr(wifi_promiscuous_pkt_t *pkt);
 #endif /* FBDBBFED_1F93_4B01_BD14_CA78B2A8298C */

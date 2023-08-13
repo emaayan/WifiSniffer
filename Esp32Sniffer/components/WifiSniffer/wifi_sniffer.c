@@ -62,7 +62,7 @@ bool isAddrEquel(const uint8_t addr[], const addrFilter_t filter)
     return f;
 }
 
-bool filter_packet(wifi_mgmt_hdr *mgmt)
+bool filter_packet(wifi_mgmt_hdr_t *mgmt)
 {
     if (xSemaphoreTake(_filter_sem, portMAX_DELAY))
     {
@@ -85,10 +85,6 @@ bool filter_packet(wifi_mgmt_hdr *mgmt)
     }
 }
 
-wifi_mgmt_hdr *sniffer_get_wifi_mgmt_hdr(wifi_promiscuous_pkt_t *pkt)
-{
-    return (wifi_mgmt_hdr *)pkt->payload;
-}
 
 static QueueHandle_t _packet_queue;
 static bool sniffer_create_queue(UBaseType_t txQSize)
@@ -125,22 +121,22 @@ static void write_packet(const wifi_promiscuous_pkt_type_t type, wifi_promiscuou
     uint32_t sig_packetLength = pkt->rx_ctrl.sig_len;
     uint8_t *payload = pkt->payload;
     pcap_rec_t pcap_rec = capture_create_packet(sig_packetLength, payload);
-    sniffer_add_queue(&pcap_rec);
+    sniffer_add_queue(&pcap_rec);     
 }
 
 void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type)
 {
-    wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *)buff;
+    wifi_promiscuous_pkt_t *pkt = ( wifi_promiscuous_pkt_t *)buff;
     if (type == WIFI_PKT_MGMT)
     {
         pkt->rx_ctrl.sig_len -= 4; // due to bug in esp-idf
     }
-    wifi_mgmt_hdr *mgmt = sniffer_get_wifi_mgmt_hdr(pkt);
+    wifi_mgmt_hdr_t *mgmt = (wifi_mgmt_hdr_t *)pkt->payload;
     const bool filter = filter_packet(mgmt);
     if (filter)
     {
         ESP_LOGD(TAG, "ADDR2=" MACSTR " , RSSI=%d ,Channel=%d ,seq=%d", MAC2STR(mgmt->ta), pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel, mgmt->seqctl & 0xFF);
-
+                
         write_packet(type, pkt);
     }
 }

@@ -24,7 +24,8 @@
 			"wifi_lib.h": "c",
 			"tcp_server.h": "c",
 			"seriallib.h": "c",
-			"esp_mac.h": "c"
+			"esp_mac.h": "c",
+			"semphr.h": "c"
 		}
 	}
 }

@@ -3,14 +3,14 @@ menu "Sniffer Configuration"
 	config SNIFFER_QUEUE_SIZE
 		int "QueueSize"
 		range 30 500
-		default 30
+		default 50
 		help
 			Sniffer Queue Size
 
 	config SNIFFER_SNAP_LEN
 		int "SnapLen"
 		range 200 2500
-		default 700
+		default 1000
 		help
 			Sniffer Maximum Packet Szie
 
@@ -30,10 +30,10 @@ menu "Sniffer Configuration"
 
 	config SOFTAP_WIFI_SSID
 		depends on WIFI_SOFTAP
-        string "WiFi SSID"
-        default "myssid"
+        string "WiFi AP SSID"
+        default "sniff"
         help
-            SSID (network name).
+            SSID prefix  (network name).
 
     config SOFTAP_WIFI_PASSWORD
 		depends on WIFI_SOFTAP
@@ -67,7 +67,7 @@ menu "Sniffer Configuration"
 	config STA_WIFI_SSID
 		depends on WIFI_STA
 		string "WiFi SSID"
-		default "myssid"
+		default "ssidtojoin"
 		help
 			SSID (network name).
 

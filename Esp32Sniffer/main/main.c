@@ -214,20 +214,20 @@ void on_serial_read(serial_messsage_t serMsg)
 void init_serials()
 {
     serial_begin_0(115200); // TODO: make sure this sets back 250000
-    // static txConfigStruct_t txConfig = {UART_NUM_0, 100, TX_TASK_SIZE, onMsgProduce};
-    //  createTxTask(&txConfig);
+                            // static txConfigStruct_t txConfig = {UART_NUM_0, 100, TX_TASK_SIZE, onMsgProduce};
+                            //  createTxTask(&txConfig);
 
-     serial_begin_2(115200); // 115200
-     
+    serial_begin_2(115200); // 115200
+
     static rxConfigStruct_t rxConfig = {.port = UART_NUM_0, .wait = 10, .taskSize = RX_TASK_SIZE, .serial_reader = on_serial_read};
-     createRxTask(&rxConfig);
+    createRxTask(&rxConfig);
 }
 
 #ifdef CONFIG_WIFI_SOFTAP
 
-#define CONFIG_ESP_WIFI_SSID CONFIG_SOFTAP_WIFI_SSID
-#define CONFIG_ESP_WIFI_PASS CONFIG_SOFTAP_WIFI_PASSWORD
-#define CONFIG_ESP_WIFI_CHANNEL 6 // CONFIG_SOFTAP_WIFI_CHANNEL
+#define SNIFFER_WIFI_SSID CONFIG_SOFTAP_WIFI_SSID
+#define SNIFFER_WIFI_PASS CONFIG_SOFTAP_WIFI_PASSWORD
+#define CONFIG_ESP_WIFI_CHANNEL CONFIG_SOFTAP_WIFI_CHANNEL
 #define CONFIG_STATIC_IP_ADDR CONFIG_SOFTAP_WIFI_IP
 #define CONFIG_STATIC_GW_ADDR CONFIG_STATIC_IP_ADDR
 #define CONFIG_STATIC_NETMASK_ADDR "255.255.255.0"
@@ -244,14 +244,16 @@ void init_config_wifi()
 {
     wifi_init();
 
+#ifndef CONFIG_WIFI_NONE
+    ssid_cfg_t ssid_cfg = {.ssid = SNIFFER_WIFI_SSID, .ssid_sz = strlen(SNIFFER_WIFI_SSID), .password = SNIFFER_WIFI_PASS, .pass_sz = strlen(SNIFFER_WIFI_PASS)};
+#endif
+
 #ifdef CONFIG_WIFI_SOFTAP
-    ssid_cfg_t ssid_cfg = {.ssid = CONFIG_ESP_WIFI_SSID, .ssid_sz = strlen(CONFIG_ESP_WIFI_SSID), .password = CONFIG_ESP_WIFI_PASS, .pass_sz = strlen(CONFIG_ESP_WIFI_PASS)};
     wifi_softAP(ssid_cfg, CONFIG_ESP_WIFI_CHANNEL, CONFIG_STATIC_IP_ADDR, CONFIG_STATIC_NETMASK_ADDR, CONFIG_STATIC_GW_ADDR, CONFIG_MAIN_DNS_SERVER, CONFIG_BACKUP_DNS_SERVER);
 #endif
 
 #ifdef CONFIG_WIFI_STA
-    ssid_cfg_t ssid_cfg_sta = {.ssid = WIFI_SSID, .ssid_sz = strlen(WIFI_SSID), .password = WIFI_PASS, .pass_sz = strlen(WIFI_PASS)};
-    wifi_sta(ssid_cfg_sta);
+    wifi_sta(ssid_cfg);
 #endif
 
     char msg[50] = "";
@@ -289,7 +291,7 @@ void setup()
 
     init_serials();
 
-     esp_log_set_vprintf(send_log); // TODO: need to solve on client side
+    // esp_log_set_vprintf(send_log); // TODO: need to solve on client side
 
     // initDisplay();
     // displayPrint(0, 17, "hello %s", "world");

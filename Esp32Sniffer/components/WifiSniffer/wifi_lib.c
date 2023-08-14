@@ -34,16 +34,15 @@ static void wifi_set_static_ip(esp_netif_t *netif, const char *ip_address, const
     ESP_ERROR_CHECK(esp_netif_dhcps_start(netif));
     ESP_LOGI(TAG, "Success to set static ip: %s, netmask: %s, gw: %s", ip_address, netmask, gw);
 
-    
     if (strlen(primary_dns))
     {
         ESP_LOGI(TAG, "Configuring DNS");
-        ESP_ERROR_CHECK(wifi_set_dns_server(netif, ipaddr_addr(primary_dns), ESP_NETIF_DNS_MAIN));        
+        ESP_ERROR_CHECK(wifi_set_dns_server(netif, ipaddr_addr(primary_dns), ESP_NETIF_DNS_MAIN));
         if (strlen(second_dns))
         {
             ESP_ERROR_CHECK(wifi_set_dns_server(netif, ipaddr_addr(second_dns), ESP_NETIF_DNS_BACKUP));
         }
-    }    
+    }
 }
 static int s_retry_num = 0;
 
@@ -139,7 +138,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
 // https://esp32tutorials.com/esp32-static-fixed-ip-address-esp-idf/
 // https://github.com/espressif/esp-idf/blob/master/examples/wifi/softap_sta/main/softap_sta.c
 
-#define CONFIG_MAX_STA_CONN 2 //CONFIG_MAX_STA_CONN_TO_AP
+#define CONFIG_MAX_STA_CONN 2 // CONFIG_MAX_STA_CONN_TO_AP
 
 static esp_netif_t *wifi_soft_ap(ssid_cfg_t ssid_cfg, uint8_t channel)
 {
@@ -151,10 +150,19 @@ static esp_netif_t *wifi_soft_ap(ssid_cfg_t ssid_cfg, uint8_t channel)
                                   .pmf_cfg = {
                                       .required = false,
                                   }}};
-    memcpy(wifi_cfg.ap.ssid, ssid_cfg.ssid, ssid_cfg.ssid_sz);
-    wifi_cfg.ap.ssid_len = ssid_cfg.ssid_sz,
+    
+    uint8_t mac[6];
+    ESP_ERROR_CHECK(esp_wifi_get_mac(WIFI_IF_AP, mac));
+    char gen_ssid[32]="";
+    int sz=snprintf(gen_ssid,sizeof(gen_ssid),"%s_%02X_%02X_%02X",ssid_cfg.ssid, mac[3], mac[4], mac[5]);
+    ESP_LOGI(TAG, "SSID will be %s:  ",gen_ssid);
+
+    memcpy(wifi_cfg.ap.ssid, gen_ssid, sz);
+    wifi_cfg.ap.ssid_len = sz;// ssid_cfg.ssid_sz,
     memcpy(wifi_cfg.ap.password, ssid_cfg.password, ssid_cfg.pass_sz);
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+
+    
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_cfg));
     return netif;
 }
@@ -181,8 +189,7 @@ void wifi_init()
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
     // esp_log_level_set("wifi",ESP_LOG_DEBUG);
-
-    // ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
+    
 
     s_wifi_event_group = xEventGroupCreate();
 
@@ -206,6 +213,7 @@ void wifi_get_mac(uint8_t mac[])
 {
     ESP_ERROR_CHECK(esp_netif_get_mac(_esp_netif, mac));
 }
+
 void wifi_get_ip(char msg[], size_t sz)
 {
     esp_netif_ip_info_t ipInfo;

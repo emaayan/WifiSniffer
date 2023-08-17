@@ -22,14 +22,33 @@ typedef struct pcap_rec_header
     const uint32_t ts_sec;   /* timestamp seconds */
     const uint32_t ts_usec;  /* timestamp microseconds */
     const uint32_t incl_len; /* number of octets of packet saved in file */
-    uint32_t orig_len; /* actual length of packet */
+    uint32_t orig_len;       /* actual length of packet */
 } pcap_rec_hdr_t;
 
 size_t hex_to_byte_array(const char *hexArray, size_t hexLength, uint8_t byteArray[]);
+// http://web.archive.org/web/20040803232023/http://www.shaftnet.org/~pizza/software/capturefrm.txt
+typedef struct
+{
+    u_int32_t version;
+    u_int32_t length;
+    u_int64_t mactime;
+    u_int64_t hosttime;
+    u_int32_t phytype;
+    u_int32_t channel;
+    u_int32_t datarate;
+    u_int32_t antenna;
+    u_int32_t priority;
+    u_int32_t ssi_type;
+    int32_t ssi_signal;
+    int32_t ssi_noise;
+    u_int32_t preamble;
+    u_int32_t encoding;
+} avs_pcap_t;
 
 typedef struct pcap_rec
 {
     pcap_rec_hdr_t pcap_rec_hdr;
+    //avs_pcap_t avs_pcap;
     uint8_t buf[MAX_LENGTH];
 } __attribute__((packed)) pcap_rec_t;
 
@@ -40,6 +59,5 @@ void capture_start();
 
 pcap_rec_t capture_create_packet(uint32_t len, uint8_t *buf);
 int capture_on_send(pcap_rec_t pcap_rec);
-
 
 #endif /* E6048912_5A40_4391_8553_587FB73E6A4C */

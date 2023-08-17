@@ -85,7 +85,6 @@ bool filter_packet(wifi_mgmt_hdr_t *mgmt)
     }
 }
 
-
 static QueueHandle_t _packet_queue;
 static bool sniffer_create_queue(UBaseType_t txQSize)
 {
@@ -121,22 +120,53 @@ static void write_packet(const wifi_promiscuous_pkt_type_t type, wifi_promiscuou
     uint32_t sig_packetLength = pkt->rx_ctrl.sig_len;
     uint8_t *payload = pkt->payload;
     pcap_rec_t pcap_rec = capture_create_packet(sig_packetLength, payload);
-    sniffer_add_queue(&pcap_rec);     
+    // avs_pcap_t avs;
+    //  wifi_pkt_rx_ctrl_t ctrl=pkt->rx_ctrl;
+    // avs.version=0;//??
+    // avs.length=ctrl.sig_len;// sizeof(avs);//????
+    // avs.mactime=ctrl.timestamp;//??
+    // avs.hosttime=0;
+    // avs.phytype=8;
+    // avs.channel=ctrl.channel;
+    // avs.datarate=ctrl.rate;
+    // avs.antenna=ctrl.ant;
+    // avs.priority=1;
+    // avs.ssi_type=2;
+    // avs.ssi_noise=avs.ssi_noise;
+    sniffer_add_queue(&pcap_rec);
+}
+
+#include <limits.h>
+unsigned rotate(unsigned short x, unsigned shift)
+{
+    return (x >> shift) |
+           (x << ((sizeof(x) * CHAR_BIT - shift) %
+                  (sizeof(x) * CHAR_BIT)));
+}
+seq_ctrl_t get_seq(int16_t seqctl)
+{
+    seq_ctrl_t seq_ctrl; // = {};
+    int16_t sq = rotate(seqctl, 4);
+    seq_ctrl.seq = sq & 0x0FFF;
+    seq_ctrl.frag = (sq & 0xF000) >> 12;
+    return seq_ctrl;
 }
 
 void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type)
 {
-    wifi_promiscuous_pkt_t *pkt = ( wifi_promiscuous_pkt_t *)buff;
+    wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *)buff;
     if (type == WIFI_PKT_MGMT)
     {
         pkt->rx_ctrl.sig_len -= 4; // due to bug in esp-idf
     }
+    // TODO: find out how to radio tap http://www.radiotap.org/  ,https://en.wikipedia.org/wiki/TZSP ,http://web.archive.org/web/20040803232023/http://www.shaftnet.org/~pizza/software/capturefrm.txt
     wifi_mgmt_hdr_t *mgmt = (wifi_mgmt_hdr_t *)pkt->payload;
     const bool filter = filter_packet(mgmt);
     if (filter)
     {
-        ESP_LOGD(TAG, "ADDR2=" MACSTR " , RSSI=%d ,Channel=%d ,seq=%d", MAC2STR(mgmt->ta), pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel, mgmt->seqctl & 0xFF);
-                
+        seq_ctrl_t sq = get_seq(mgmt->seqctl);
+        ESP_LOGI(TAG, "ADDR2=" MACSTR " , RSSI=%d ,Channel=%d ,seq=%d:%d", MAC2STR(mgmt->ta), pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel, sq.seq, sq.frag);
+
         write_packet(type, pkt);
     }
 }
@@ -239,12 +269,11 @@ void sniffer_init_config(addrFilter_t ownMac)
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(wifi_sniffer_packet_handler)); // callback function
 }
 
-
 TaskHandle_t xHandle_sniff = NULL;
 void sniffer_start()
 {
     // wifi_sniffer_init();
-    xTaskCreate(&sniffer_task, "sniffig_task",configMINIMAL_STACK_SIZE*8, &snifConfig, 1, &xHandle_sniff);
+    xTaskCreate(&sniffer_task, "sniffig_task", configMINIMAL_STACK_SIZE * 8, &snifConfig, 1, &xHandle_sniff);
 }
 
 void sniffer_stop()

@@ -9,6 +9,7 @@
 static const char *TAG = "CaptureLib";
 
 static pcap_hdr_t pcap_hdr = {.magic_number = 0xa1b2c3d4, .version_major = 2, .version_minor = 4, .thiszone = 0, .sigfigs = 0, .snaplen = MAX_LENGTH, .network = 105};
+//static pcap_hdr_t pcap_hdr = {.magic_number = 0xa1b2c3d4, .version_major = 2, .version_minor = 4, .thiszone = 0, .sigfigs = 0, .snaplen = MAX_LENGTH, .network = 163};//LINKTYPE_IEEE802_11_AVS
 
 static int hex_to_decimal(char hexChar)
 {
@@ -95,6 +96,7 @@ pcap_rec_hdr_t capture_create_header(uint32_t len)
 pcap_rec_t capture_create_packet(uint32_t len, uint8_t *buf)
 {
     pcap_rec_hdr_t pcap_rec_hdr = capture_create_header(len);
+    //pcap_rec_t pcap_rec = {.pcap_rec_hdr = pcap_rec_hdr,.avs_pcap={}, .buf = {}};
     pcap_rec_t pcap_rec = {.pcap_rec_hdr = pcap_rec_hdr, .buf = {}};
     memcpy(pcap_rec.buf, buf, pcap_rec_hdr.incl_len);
     return pcap_rec;

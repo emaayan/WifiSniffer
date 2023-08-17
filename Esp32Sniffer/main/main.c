@@ -237,16 +237,16 @@ void init_serials()
 #endif
 
 #ifdef CONFIG_WIFI_STA
-#define WIFI_SSID CONFIG_STA_WIFI_SSID
-#define WIFI_PASS CONFIG_STA_WIFI_PASSWORD
+#define SNIFFER_WIFI_SSID CONFIG_STA_WIFI_SSID
+#define SNIFFER_WIFI_PASS CONFIG_STA_WIFI_PASSWORD
 #endif
 void init_config_wifi()
 {
     wifi_init();
-
-#ifndef CONFIG_WIFI_NONE
     ssid_cfg_t ssid_cfg = {.ssid = SNIFFER_WIFI_SSID, .ssid_sz = strlen(SNIFFER_WIFI_SSID), .password = SNIFFER_WIFI_PASS, .pass_sz = strlen(SNIFFER_WIFI_PASS)};
-#endif
+// #ifndef CONFIG_WIFI_NONE
+//     ssid_cfg_t ssid_cfg = {.ssid = SNIFFER_WIFI_SSID, .ssid_sz = strlen(SNIFFER_WIFI_SSID), .password = SNIFFER_WIFI_PASS, .pass_sz = strlen(SNIFFER_WIFI_PASS)};
+// #endif
 
 #ifdef CONFIG_WIFI_SOFTAP
     wifi_softAP(ssid_cfg, CONFIG_ESP_WIFI_CHANNEL, CONFIG_STATIC_IP_ADDR, CONFIG_STATIC_NETMASK_ADDR, CONFIG_STATIC_GW_ADDR, CONFIG_MAIN_DNS_SERVER, CONFIG_BACKUP_DNS_SERVER);
@@ -306,8 +306,8 @@ void setup()
     capture_set_cb(on_start_capture, on_capture);
     sniffer_init_config(ownMac);
 
-    // addrFilter_t f={{0x00, 0x0C, 0XCC}, 3};
-    addrFilter_t f = {{}, 0};
+     addrFilter_t f={{0x00, 0x0C, 0XCC}, 3};
+    //addrFilter_t f = {{}, 0};
     sniffer_set_addr2_filter(f);
 
     tcp_server();

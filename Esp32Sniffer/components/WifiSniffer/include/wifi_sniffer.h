@@ -11,6 +11,13 @@
 
 typedef struct
 {
+    uint16_t frag;
+    uint16_t seq;
+} seq_ctrl_t;
+seq_ctrl_t get_seq(int16_t seqctl);
+
+typedef struct
+{
     uint8_t addr[6];
     int size;
 } addrFilter_t;
@@ -32,17 +39,16 @@ typedef struct
     uint8_t *payload; // network data(includes addr4)
 } __attribute__((packed)) wifi_mgmt_hdr_t;
 
-typedef struct//any change in fields above need to change here
+typedef struct // any change in fields above need to change here
 {
-    int16_t fctl;     
-    int16_t duration; 
-    uint8_t ra[6];    
-    uint8_t ta[6];    
-    uint8_t sa[6];    
-    int16_t seqctl;   
+    int16_t fctl;
+    int16_t duration;
+    uint8_t ra[6];
+    uint8_t ta[6];
+    uint8_t sa[6];
+    int16_t seqctl;
     uint8_t payload[100]; // place for actuall log
 } __attribute__((packed)) log_hdr_t;
-
 
 void sniffer_set_own_mac_filter(addrFilter_t addrFilter);
 void sniffer_set_addr2_filter(addrFilter_t addrFilter);

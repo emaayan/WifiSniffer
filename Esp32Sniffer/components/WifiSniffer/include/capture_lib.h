@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <inttypes.h>
+#include <esp_wifi_types.h>
 #include "../../build/config/sdkconfig.h"
 #define MAX_LENGTH CONFIG_SNIFFER_SNAP_LEN // 2500
 
@@ -14,50 +15,63 @@ typedef struct pcap_capture_header
     const uint32_t thiszone; /* GMT to local correction */
     const uint32_t sigfigs;  /* accuracy of timestamps */
     const uint32_t snaplen;  /* max length of captured packets, in octets */
-    uint32_t network;        /* data link type */
+    const uint32_t network;        /* data link type */
 } pcap_hdr_t;
 
 typedef struct pcap_rec_header
 {
     const uint32_t ts_sec;   /* timestamp seconds */
     const uint32_t ts_usec;  /* timestamp microseconds */
-    const uint32_t incl_len; /* number of octets of packet saved in file */
+    uint32_t incl_len; /* number of octets of packet saved in file */
     uint32_t orig_len;       /* actual length of packet */
 } pcap_rec_hdr_t;
 
-size_t hex_to_byte_array(const char *hexArray, size_t hexLength, uint8_t byteArray[]);
-// http://web.archive.org/web/20040803232023/http://www.shaftnet.org/~pizza/software/capturefrm.txt
+// https://www.radiotap.org/
+
 typedef struct
 {
-    u_int32_t version;
-    u_int32_t length;
-    u_int64_t mactime;
-    u_int64_t hosttime;
-    u_int32_t phytype;
-    u_int32_t channel;
-    u_int32_t datarate;
-    u_int32_t antenna;
-    u_int32_t priority;
-    u_int32_t ssi_type;
-    int32_t ssi_signal;
-    int32_t ssi_noise;
-    u_int32_t preamble;
-    u_int32_t encoding;
-} avs_pcap_t;
+    u_int8_t it_version; /* set to 0 */
+    u_int8_t it_pad;
+    u_int16_t it_len;     /* entire length */
+    u_int32_t it_present; /* fields present */
+} __attribute__((__packed__)) ieee80211_radiotap_header_t;
+
+typedef struct // https://www.radiotap.org/fields/XChannel
+{
+    uint32_t flags;
+    uint16_t freq;
+    uint8_t channel;
+    uint8_t maxPower;
+} __attribute__((packed)) r_tapdata_channel_t;
+
+#define IT_PRESENT 0b00000000000001000000100001100000
+typedef struct // https://www.radiotap.org/fields/
+{    
+    int8_t signal;                         // 5 https://www.radiotap.org/fields/Antenna%20signal.html
+    int8_t noise;                          //  6 https://www.radiotap.org/fields/Antenna%20noise.html
+    uint8_t antenna;                       // 11 https://www.radiotap.org/fields/Antenna.html
+    uint8_t pad_for_channel;
+    r_tapdata_channel_t r_tapdata_channel; // 18 https://www.radiotap.org/fields/XChannel
+    // EVERY CHANGE IN THIS STRUCUCTURE MUST BE REFLECTED IN IT_PRESET BIT FIELD
+} __attribute__((packed)) r_tapdata_t;
+
+size_t hex_to_byte_array(const char *hexArray, size_t hexLength, uint8_t byteArray[]);
 
 typedef struct pcap_rec
 {
     pcap_rec_hdr_t pcap_rec_hdr;
-    //avs_pcap_t avs_pcap;
+    ieee80211_radiotap_header_t ieee80211_radiotap_header;
+    r_tapdata_t r_tapdata;
     uint8_t buf[MAX_LENGTH];
 } __attribute__((packed)) pcap_rec_t;
 
 typedef int (*on_start_capture_cb)(pcap_hdr_t pcap_hdr);
-typedef int (*on_capture_cb)(pcap_rec_t pcaprec,size_t total_size);
+typedef int (*on_capture_cb)(pcap_rec_t pcaprec, size_t total_size);
 void capture_set_cb(on_start_capture_cb on_start_capture_cb, on_capture_cb on_capture_cb);
 void capture_start();
 
 pcap_rec_t capture_create_packet(uint32_t len, uint8_t *buf);
 int capture_on_send(pcap_rec_t pcap_rec);
+pcap_rec_t capture_create_pcap_record(wifi_promiscuous_pkt_t *pkt);
 
 #endif /* E6048912_5A40_4391_8553_587FB73E6A4C */

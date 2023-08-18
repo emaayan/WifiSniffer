@@ -306,8 +306,8 @@ void setup()
     capture_set_cb(on_start_capture, on_capture);
     sniffer_init_config(ownMac);
 
-     addrFilter_t f={{0x00, 0x0C, 0XCC}, 3};
-    //addrFilter_t f = {{}, 0};
+    // addrFilter_t f={{0x00, 0x0C, 0XCC}, 3};
+    addrFilter_t f = {{}, 0};
     sniffer_set_addr2_filter(f);
 
     tcp_server();

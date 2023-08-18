@@ -8,8 +8,8 @@
 
 static const char *TAG = "CaptureLib";
 
-static pcap_hdr_t pcap_hdr = {.magic_number = 0xa1b2c3d4, .version_major = 2, .version_minor = 4, .thiszone = 0, .sigfigs = 0, .snaplen = MAX_LENGTH, .network = 105};
-//static pcap_hdr_t pcap_hdr = {.magic_number = 0xa1b2c3d4, .version_major = 2, .version_minor = 4, .thiszone = 0, .sigfigs = 0, .snaplen = MAX_LENGTH, .network = 163};//LINKTYPE_IEEE802_11_AVS
+static pcap_hdr_t pcap_hdr = {.magic_number = 0xa1b2c3d4, .version_major = 2, .version_minor = 4, .thiszone = 0, .sigfigs = 0, .snaplen = MAX_LENGTH, .network = 127}; // LINKTYPE_IEEE802_11_RADIOTAP
+static ieee80211_radiotap_header_t ieee80211_radiotap_header = {.it_version = 0, .it_len = sizeof(ieee80211_radiotap_header_t) + sizeof(r_tapdata_t), .it_present = IT_PRESENT};
 
 static int hex_to_decimal(char hexChar)
 {
@@ -80,11 +80,6 @@ void capture_start()
     }
 }
 
-void set_network_type(uint32_t type)
-{
-    pcap_hdr.network = type; // MABYE USED FOR OTHER TYPES?
-}
-
 pcap_rec_hdr_t capture_create_header(uint32_t len)
 {
     struct timeval tv_now;
@@ -93,11 +88,31 @@ pcap_rec_hdr_t capture_create_header(uint32_t len)
     return pcap_rec_hdr;
 }
 
-pcap_rec_t capture_create_packet(uint32_t len, uint8_t *buf)
+
+r_tapdata_t capture_radio_tap(wifi_pkt_rx_ctrl_t ctrl)
 {
-    pcap_rec_hdr_t pcap_rec_hdr = capture_create_header(len);
-    //pcap_rec_t pcap_rec = {.pcap_rec_hdr = pcap_rec_hdr,.avs_pcap={}, .buf = {}};
-    pcap_rec_t pcap_rec = {.pcap_rec_hdr = pcap_rec_hdr, .buf = {}};
+    r_tapdata_t r_tapdata = {.noise = ctrl.noise_floor, .signal = ctrl.rssi, .antenna = ctrl.ant, .r_tapdata_channel = {.channel = ctrl.channel}};
+    return r_tapdata;
+}
+
+pcap_rec_t capture_create_packet(uint32_t len, uint8_t *buf)
+{    
+    pcap_rec_hdr_t pcap_rec_hdr = capture_create_header(len+ieee80211_radiotap_header.it_len);
+    pcap_rec_t pcap_rec = {.pcap_rec_hdr = pcap_rec_hdr, .ieee80211_radiotap_header = ieee80211_radiotap_header, .buf = {}};    
     memcpy(pcap_rec.buf, buf, pcap_rec_hdr.incl_len);
+    return pcap_rec;
+}
+
+pcap_rec_t capture_create_pcap_record(wifi_promiscuous_pkt_t *pkt)
+{
+    uint32_t sig_packetLength = pkt->rx_ctrl.sig_len;
+    uint8_t *payload = pkt->payload;
+    pcap_rec_t pcap_rec = capture_create_packet(sig_packetLength, payload);
+
+    wifi_pkt_rx_ctrl_t ctrl = pkt->rx_ctrl;
+    pcap_rec.r_tapdata.noise = ctrl.noise_floor;
+    pcap_rec.r_tapdata.signal = ctrl.rssi;
+    pcap_rec.r_tapdata.antenna = ctrl.ant;
+    pcap_rec.r_tapdata.r_tapdata_channel.channel = ctrl.channel;
     return pcap_rec;
 }

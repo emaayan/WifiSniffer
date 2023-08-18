@@ -13,7 +13,7 @@
 #include "capture_lib.h"
 
 #include "../build/config/sdkconfig.h"
-
+#include <led_lib.h>
 static const char *TAG = "WifiSnifferMain";
 // https://github.com/espressif/esp-idf/blob/master/examples/common_components/protocol_examples_common/
 //  https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/esp_event.html
@@ -36,7 +36,7 @@ int send_log(const char *fmt, va_list argptr)
     }
     else
     {
-        txBytes = serial_write_2((int8_t*)buff, sz);
+        txBytes = serial_write_2((int8_t *)buff, sz);
     }
     return txBytes;
 }
@@ -45,7 +45,7 @@ bool serialConnected = false;
 void signal_start()
 {
     serialConnected = true;
-    custom_serial=true;
+    custom_serial = true;
     sniffer_start();
 }
 
@@ -217,7 +217,7 @@ void init_serials()
                             // static txConfigStruct_t txConfig = {UART_NUM_0, 100, TX_TASK_SIZE, onMsgProduce};
                             //  createTxTask(&txConfig);
 
-    serial_begin_2(115200); // 115200
+    // serial_begin_2(115200); // 115200
 
     static rxConfigStruct_t rxConfig = {.port = UART_NUM_0, .wait = 10, .taskSize = RX_TASK_SIZE, .serial_reader = on_serial_read};
     createRxTask(&rxConfig);
@@ -244,9 +244,9 @@ void init_config_wifi()
 {
     wifi_init();
     ssid_cfg_t ssid_cfg = {.ssid = SNIFFER_WIFI_SSID, .ssid_sz = strlen(SNIFFER_WIFI_SSID), .password = SNIFFER_WIFI_PASS, .pass_sz = strlen(SNIFFER_WIFI_PASS)};
-// #ifndef CONFIG_WIFI_NONE
-//     ssid_cfg_t ssid_cfg = {.ssid = SNIFFER_WIFI_SSID, .ssid_sz = strlen(SNIFFER_WIFI_SSID), .password = SNIFFER_WIFI_PASS, .pass_sz = strlen(SNIFFER_WIFI_PASS)};
-// #endif
+    // #ifndef CONFIG_WIFI_NONE
+    //     ssid_cfg_t ssid_cfg = {.ssid = SNIFFER_WIFI_SSID, .ssid_sz = strlen(SNIFFER_WIFI_SSID), .password = SNIFFER_WIFI_PASS, .pass_sz = strlen(SNIFFER_WIFI_PASS)};
+    // #endif
 
 #ifdef CONFIG_WIFI_SOFTAP
     wifi_softAP(ssid_cfg, CONFIG_ESP_WIFI_CHANNEL, CONFIG_STATIC_IP_ADDR, CONFIG_STATIC_NETMASK_ADDR, CONFIG_STATIC_GW_ADDR, CONFIG_MAIN_DNS_SERVER, CONFIG_BACKUP_DNS_SERVER);
@@ -268,7 +268,6 @@ void init_config_wifi()
 
 void tcp_server()
 {
-
     static tcp_server_config_t tcp_server_config = {.port = PORT, .keepIdle = KEEPALIVE_IDLE, .keepInterval = KEEPALIVE_INTERVAL, .keepCount = KEEPALIVE_COUNT, .on_socket_accept = on_socket_accept_handler};
     start_tcp_server(&tcp_server_config);
 }
@@ -283,11 +282,31 @@ void flash_init()
     }
     ESP_ERROR_CHECK(ret);
 }
-
+void sniffer_on_event_handler(int32_t event_id, void *event_data)
+{
+    ESP_LOGI(TAG, "Got Event %" PRId32, event_id);
+    switch (event_id)
+    {
+    case SNIFFER_EVENT_QUEUE_FULL:
+        led_blink_fast();
+        break;
+    case SNIFFER_EVENT_IS_UP:
+        led_blink_slow();
+        break;    
+    case SNIFFER_EVENT_CAPTURE_STARTED:
+        led_blink_slow();
+        led_blink_slow();
+        break;    
+    default:
+        break;
+    }
+}
 void setup()
 {
     ESP_LOGI(TAG, "[+] Startup...");
+
     flash_init();
+    led_init();
 
     init_serials();
 
@@ -298,19 +317,20 @@ void setup()
     // ESP_ERROR_CHECK(esp_event_loop_create(event_handler, NULL)); // initialize (wifi) event handler
 
     init_config_wifi();
+    tcp_server();
 
     addrFilter_t ownMac = {.size = 6};
     wifi_get_mac(ownMac.addr);
     ESP_LOGI(TAG, "MAC Address Is : " MACSTR, MAC2STR(ownMac.addr));
 
     capture_set_cb(on_start_capture, on_capture);
-    sniffer_init_config(ownMac);
+    sniffer_init_config(ownMac,sniffer_on_event_handler);    
 
     // addrFilter_t f={{0x00, 0x0C, 0XCC}, 3};
     addrFilter_t f = {{}, 0};
     sniffer_set_addr2_filter(f);
 
-    tcp_server();
+ 
 }
 
 void app_main(void)

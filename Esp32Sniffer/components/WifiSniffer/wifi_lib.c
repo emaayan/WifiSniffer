@@ -1,9 +1,10 @@
 
 #include <wifi_lib.h>
 #include "freertos/event_groups.h"
-static const char *TAG = "WifiLib";
 #include <stdint.h>
 
+
+static const char *TAG = "WifiLib";
 static EventGroupHandle_t s_wifi_event_group;
 
 static esp_err_t wifi_set_dns_server(esp_netif_t *netif, uint32_t addr, esp_netif_dns_type_t type)

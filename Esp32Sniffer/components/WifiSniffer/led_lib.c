@@ -6,23 +6,29 @@
 
 #define BUILD_IN_LED GPIO_NUM_2
 
-void init_led()
+void led_init()
 {
     ESP_ERROR_CHECK(gpio_set_direction(BUILD_IN_LED, GPIO_MODE_OUTPUT));
 }
 
-void set_led(bool on)
+void led_set(uint8_t on)
 {
     ESP_ERROR_CHECK(gpio_set_level(BUILD_IN_LED, on ? 1 : 0));
 }
 
-void led_blink(void *pvParams)
-{    
-    while (1)
-    {
-        set_led(true);
-//        vTaskDelay(1000 / portTICK_RATE_MS);
-        set_led(false);
-    }
-    vTaskDelete(NULL);
+void led_blink(uint8_t delay)
+{
+    led_set(false);
+    led_set(true);
+    vTaskDelay(pdMS_TO_TICKS(delay));
+    led_set(false);
+}
+
+void led_blink_fast()
+{
+    led_blink(10);
+}
+void led_blink_slow()
+{
+    led_blink(200);
 }

@@ -78,6 +78,7 @@ void sniffer_set_filter(addrFilter_t addrFilter, addrFilter_t *filter)
     if (xSemaphoreTake(_filter_sem, portMAX_DELAY))
     {
         *filter = addrFilter;
+        ESP_LOGI(TAG,"Set filter");        
         if (!xSemaphoreGive(_filter_sem))
         {
             ESP_LOGE(TAG, "Error releaseing addrOwnMac semaphore");
@@ -279,11 +280,11 @@ void sniffer_task(void *pvParameter)
 
         pcap_rec_t msg;
         if (xQueueReceive(_packet_queue, &msg, pdMS_TO_TICKS(10)))
-        {         
+        {
             // wifi_mgmt_hdr_t *mgmt = (wifi_mgmt_hdr_t *)msg.buf;
             // seq_ctrl_t sq = get_seq(mgmt->seqctl);
             // ESP_LOGI(TAG, "GOT ADDR2=" MACSTR " , RSSI=%d ,Channel=%d ,seq=%d:%d", MAC2STR(mgmt->ta), msg.r_tapdata.signal, msg.r_tapdata.r_tapdata_channel.channel, sq.seq, sq.frag);
-            
+
             capture_on_send(msg);
         }
         // if (filter_channel == 0)
@@ -293,18 +294,35 @@ void sniffer_task(void *pvParameter)
     }
 }
 
+static void sniffer_set_filter_packet_type(wifi_promiscuous_filter_t wifi_promiscuous_filter)
+{
+    ESP_ERROR_CHECK(esp_wifi_set_promiscuous_filter(&wifi_promiscuous_filter));
+}
+
+void sniffer_set_filter_data()
+{
+    wifi_promiscuous_filter_t wifi_promiscuous_filter = {.filter_mask = WIFI_PROMIS_FILTER_MASK_DATA};
+    sniffer_set_filter_packet_type(wifi_promiscuous_filter);
+}
+//no filter on packet types alone
+void sniffer_set_no_filter()
+{
+    wifi_promiscuous_filter_t wifi_promiscuous_filter = {.filter_mask = WIFI_PROMIS_FILTER_MASK_ALL};
+    sniffer_set_filter_packet_type(wifi_promiscuous_filter);
+}
+
 #define sniffer_queue_size CONFIG_SNIFFER_QUEUE_SIZE
-void sniffer_init_config(addrFilter_t ownMac,sniffer_event_handler_t sniffer_event_handler)
+void sniffer_init_config(addrFilter_t ownMac, sniffer_event_handler_t sniffer_event_handler)
 {
     sniffer_create_queue(sniffer_queue_size);
     _filter_sem = xSemaphoreCreateMutex();
     filter_channel = 1;
     sniffer_set_own_mac_filter(ownMac);
-    ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(wifi_sniffer_packet_handler)); 
+    ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(wifi_sniffer_packet_handler));
 
     sniffer_start_event_loop();
     sniffer_register_event_handler(sniffer_event_handler);
-    sniffer_post_event(SNIFFER_EVENT_IS_UP);    
+    sniffer_post_event(SNIFFER_EVENT_IS_UP);
 }
 
 TaskHandle_t xHandle_sniff = NULL;

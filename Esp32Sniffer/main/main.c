@@ -15,11 +15,7 @@
 #include "../build/config/sdkconfig.h"
 #include <led_lib.h>
 static const char *TAG = "WifiSnifferMain";
-// https://github.com/espressif/esp-idf/blob/master/examples/common_components/protocol_examples_common/
-//  https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/esp_event.html
-//  https://www.youtube.com/watch?v=STGK2nT8S9Q
 
-#define WRITE_BUFF 512
 bool custom_serial = false;
 int send_log(const char *fmt, va_list argptr)
 {
@@ -32,11 +28,11 @@ int send_log(const char *fmt, va_list argptr)
         log_hdr_t h = {.fctl = 0xFC, .duration = 0, .ra = {}, .sa = {}, .ta = {}, .seqctl = 0, .payload = {}};
         memcpy(h.payload, buff, sz);
         pcap_rec_t pcap_rec = capture_create_packet(sz, (uint8_t *)&h);
-        txBytes = serial_write_2((void *)&pcap_rec, pcap_rec.pcap_rec_hdr.incl_len);
+        txBytes = serial_write_0((void *)&pcap_rec, pcap_rec.pcap_rec_hdr.incl_len);
     }
     else
     {
-        txBytes = serial_write_2((int8_t *)buff, sz);
+        txBytes = serial_write_0((int8_t *)buff, sz);
     }
     return txBytes;
 }
@@ -167,6 +163,14 @@ void readMessage(serial_messsage_t msg)
             ESP_LOGD(TAG, "Got Start capture");
             signal_start();
         }
+        if (isOpCode(op, "FD")) 
+        {
+            sniffer_set_filter_data();
+        }
+        if (isOpCode(op, "FA")) 
+        {
+            sniffer_set_no_filter();
+        }
         if (isOpCode(op, "FC")) // SHOULD ONLY HAPPEN ON SERIAL
         {
             const size_t sz = msg.size - 2;
@@ -292,11 +296,11 @@ void sniffer_on_event_handler(int32_t event_id, void *event_data)
         break;
     case SNIFFER_EVENT_IS_UP:
         led_blink_slow();
-        break;    
+        break;
     case SNIFFER_EVENT_CAPTURE_STARTED:
         led_blink_slow();
         led_blink_slow();
-        break;    
+        break;
     default:
         break;
     }
@@ -324,13 +328,13 @@ void setup()
     ESP_LOGI(TAG, "MAC Address Is : " MACSTR, MAC2STR(ownMac.addr));
 
     capture_set_cb(on_start_capture, on_capture);
-    sniffer_init_config(ownMac,sniffer_on_event_handler);    
+    sniffer_init_config(ownMac, sniffer_on_event_handler);
+    sniffer_set_no_filter();
 
+    // sniffer_filter_data();
     // addrFilter_t f={{0x00, 0x0C, 0XCC}, 3};
     addrFilter_t f = {{}, 0};
     sniffer_set_addr2_filter(f);
-
- 
 }
 
 void app_main(void)

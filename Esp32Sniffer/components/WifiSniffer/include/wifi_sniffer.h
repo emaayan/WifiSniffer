@@ -66,10 +66,10 @@ typedef enum
     SNIFFER_EVENT_QUEUE_FULL,
     SNIFFER_EVENT_CAPTURE_STARTED,
     SNIFFER_EVENT_CAPTURE_STOPPED,
-    SNIFFER_EVENT_IS_UP    
+    SNIFFER_EVENT_IS_UP
 } sniffer_event_types_t;
 
 void sniffer_register_event_handler(sniffer_event_handler_t event_handler);
-
-
+void sniffer_set_filter_data();
+void sniffer_set_no_filter();
 #endif /* FBDBBFED_1F93_4B01_BD14_CA78B2A8298C */

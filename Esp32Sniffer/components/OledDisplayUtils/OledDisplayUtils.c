@@ -3,6 +3,7 @@
 #include "OledDisplayUtils.h"
 
 #include <ssd1306.h>
+#include <stdarg.h>
 
 #define I2C_MASTER_NUM CONFIG_I2C_MASTER_PORT /*!< I2C port number for master dev */
 static ssd1306_handle_t ssd1306_dev = NULL;

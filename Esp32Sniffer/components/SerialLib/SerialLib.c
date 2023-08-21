@@ -10,18 +10,6 @@
 
 static const char *TAG = "SerialLib";
 
-int serial_v_write(uart_port_t port, char buffer[], size_t sz, const char *fmt, va_list argptr)
-{
-    vsnprintf(buffer, sz, fmt, argptr);
-    const int txBytes = uart_write_bytes(port, buffer, sz);
-    return txBytes;
-}
-
-int serial_log(const char *fmt, va_list argptr)
-{
-    char buff[LOG_LINE_SZ] = "";
-    return serial_v_write(LOG_PORT, buff, sizeof(buff), fmt, argptr);
-}
 
 void serial_begin(uart_port_t port, int txPin, int rxPin, int baud)
 {
@@ -45,12 +33,6 @@ void serial_begin_0(int baud)
     serial_begin(UART_NUM_0, GPIO_NUM_1, GPIO_NUM_3, baud);
     started_0 = true;
 }
-static bool started_2 = false;
-void serial_begin_2(int baud)
-{
-    serial_begin(UART_NUM_2, GPIO_NUM_17, GPIO_NUM_16, baud);
-    started_2 = true;
-}
 
 int serial_write_0(const int8_t *src, size_t size)
 {
@@ -65,18 +47,6 @@ int serial_write_0(const int8_t *src, size_t size)
     }
 }
 
-int serial_write_2(const int8_t *src, size_t size)
-{
-    if (started_2)
-    {
-        return uart_write_bytes(UART_NUM_2, src, size);
-    }
-    else
-    {
-        ESP_LOGE(TAG, "Did not init port 2");
-        return 0;
-    }
-}
 
 static void tx_task(void *arg)
 {
@@ -102,7 +72,7 @@ static void tx_task(void *arg)
 
 void createTxTask(txConfigStruct_t *txConfiguration)
 {
-    xTaskCreate(tx_task, "uart_tx_task", txConfiguration->taskSize, txConfiguration, configMAX_PRIORITIES - 1, NULL);
+    xTaskCreate(tx_task, "uart_tx_task", txConfiguration->taskSize, txConfiguration, configMAX_PRIORITIES - 5, NULL);
 }
 
 static void rx_task(void *arg)
@@ -116,7 +86,7 @@ static void rx_task(void *arg)
 
         int8_t data[RX_SZ + 1] = {'\0'};
         const size_t sz = sizeof(data);
-        const int rxBytes = uart_read_bytes(port, data, sz, wait / portTICK_PERIOD_MS);
+        const int rxBytes = uart_read_bytes(port, data, sz,pdMS_TO_TICKS(wait));
 
         if (rxBytes > 0)
         {
@@ -141,5 +111,5 @@ static void rx_task(void *arg)
 }
 void createRxTask(rxConfigStruct_t *rxConfiguration)
 {
-    xTaskCreate(rx_task, "uart_rx_task", rxConfiguration->taskSize, rxConfiguration, configMAX_PRIORITIES, NULL);
+    xTaskCreate(rx_task, "uart_rx_task", rxConfiguration->taskSize, rxConfiguration, configMAX_PRIORITIES-10, NULL);
 }

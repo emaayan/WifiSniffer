@@ -4,14 +4,11 @@
 #include "driver/uart.h"
 
 #define LOG_PORT UART_NUM_0
-#define LOG_LINE_SZ 200
-int serial_v_write(uart_port_t port, char buffer[], size_t sz, const char *fmt, va_list argptr);
-int serial_log(const char *fmt, va_list argptr);
+
+
 
 void serial_begin_0(int baud);
-void serial_begin_2(int baud);
 int serial_write_0(const int8_t *src, size_t size);
-int serial_write_2(const int8_t *src, size_t size);
 
 typedef struct
 {
@@ -30,11 +27,11 @@ typedef struct
 
 } txConfigStruct_t;
 
-#define TX_TASK_SIZE configMINIMAL_STACK_SIZE *4
+#define TX_TASK_SIZE configMINIMAL_STACK_SIZE * 4
 void createTxTask(txConfigStruct_t *txConfiguration);
 
 #define RX_SZ 50
-#define RX_TASK_SIZE configMINIMAL_STACK_SIZE *5
+#define RX_TASK_SIZE configMINIMAL_STACK_SIZE * 5
 
 typedef struct
 {

@@ -16,38 +16,13 @@
 #include <led_lib.h>
 static const char *TAG = "WifiSnifferMain";
 
-bool custom_serial = false;
-int send_log(const char *fmt, va_list argptr)
-{
-
-    char buff[256] = "";
-    size_t sz = vsnprintf(buff, sizeof(buff), fmt, argptr);
-    int txBytes;
-    if (custom_serial)
-    {
-        log_hdr_t h = {.fctl = 0xFC, .duration = 0, .ra = {}, .sa = {}, .ta = {}, .seqctl = 0, .payload = {}};
-        memcpy(h.payload, buff, sz);
-        pcap_rec_t pcap_rec = capture_create_packet(sz, (uint8_t *)&h);
-        txBytes = serial_write_0((void *)&pcap_rec, pcap_rec.pcap_rec_hdr.incl_len);
-    }
-    else
-    {
-        txBytes = serial_write_0((int8_t *)buff, sz);
-    }
-    return txBytes;
-}
-
-bool serialConnected = false;
 void signal_start()
-{
-    serialConnected = true;
-    custom_serial = true;
+{    
     sniffer_start();
 }
 
 void signal_stop()
 {
-    serialConnected = false;
     sniffer_stop();
 }
 
@@ -56,19 +31,7 @@ void on_socket_accept_handler(const int sock, struct sockaddr_in *so_in)
 {
     disconnect_socket(_sock);
     _sock = sock;
-    sniffer_start(); // TODO: what happens if signal_start called twice (once from socket)
-}
-
-int send_serial(const int8_t *src, size_t size)
-{
-    if (serialConnected)
-    {
-        return serial_write_0(src, size);
-    }
-    else
-    {
-        return 0;
-    }
+    sniffer_start(); 
 }
 
 int on_start_capture(pcap_hdr_t pcap_hdr)
@@ -83,9 +46,6 @@ int on_start_capture(pcap_hdr_t pcap_hdr)
             sniffer_stop();
         }
     }
-
-    sz = send_serial(msg, sz);
-
     return sz;
 }
 
@@ -100,8 +60,6 @@ int on_capture(pcap_rec_t pcap_rec, size_t total_size)
             sniffer_stop();
         }
     }
-
-    send_serial(msg, total_size);
     return total_size;
 }
 
@@ -163,11 +121,11 @@ void readMessage(serial_messsage_t msg)
             ESP_LOGD(TAG, "Got Start capture");
             signal_start();
         }
-        if (isOpCode(op, "FD")) 
+        if (isOpCode(op, "FD"))
         {
             sniffer_set_filter_data();
         }
-        if (isOpCode(op, "FA")) 
+        if (isOpCode(op, "FA"))
         {
             sniffer_set_no_filter();
         }
@@ -211,17 +169,15 @@ void readMessage(serial_messsage_t msg)
 void on_serial_read(serial_messsage_t serMsg)
 {
     ESP_LOGD(TAG, "port: %d,Data  %s ", serMsg.srcPort, serMsg.data);
-    readMessage(serMsg);
+    readMessage(serMsg);    
 }
 
-// TODO: get back serial to port 0, but make sure to use headers to mark data as data
+
 void init_serials()
 {
     serial_begin_0(115200); // TODO: make sure this sets back 250000
                             // static txConfigStruct_t txConfig = {UART_NUM_0, 100, TX_TASK_SIZE, onMsgProduce};
                             //  createTxTask(&txConfig);
-
-    // serial_begin_2(115200); // 115200
 
     static rxConfigStruct_t rxConfig = {.port = UART_NUM_0, .wait = 10, .taskSize = RX_TASK_SIZE, .serial_reader = on_serial_read};
     createRxTask(&rxConfig);
@@ -286,6 +242,7 @@ void flash_init()
     }
     ESP_ERROR_CHECK(ret);
 }
+
 void sniffer_on_event_handler(int32_t event_id, void *event_data)
 {
     ESP_LOGI(TAG, "Got Event %" PRId32, event_id);
@@ -313,8 +270,6 @@ void setup()
     led_init();
 
     init_serials();
-
-    // esp_log_set_vprintf(send_log); // TODO: need to solve on client side
 
     // initDisplay();
     // displayPrint(0, 17, "hello %s", "world");

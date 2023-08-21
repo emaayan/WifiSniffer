@@ -178,6 +178,7 @@ static esp_netif_t *wifi_set_sta(ssid_cfg_t ssid_cfg)
     memcpy(staConf.password, ssid_cfg.password, ssid_cfg.pass_sz);
     esp_netif_t *netif = esp_netif_create_default_wifi_sta();
     wifi_config_t cfg = {.sta = staConf};
+    ESP_LOGI(TAG, "Attempting to join %s:  ",staConf.bssid);
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &cfg));
     return netif;
@@ -188,8 +189,6 @@ void wifi_init()
     ESP_LOGI(TAG, "Init Wifi");
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-
-    // esp_log_level_set("wifi",ESP_LOG_DEBUG);
     
 
     s_wifi_event_group = xEventGroupCreate();

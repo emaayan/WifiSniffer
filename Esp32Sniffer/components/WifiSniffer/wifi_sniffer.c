@@ -136,6 +136,7 @@ bool filter_packet(wifi_mgmt_hdr_t *mgmt)
 static QueueHandle_t _packet_queue;
 static bool sniffer_create_queue(UBaseType_t txQSize)
 {
+    ESP_LOGI(TAG, "Sniffer Queue Size: %d",txQSize);
     QueueHandle_t queue = xQueueCreate(txQSize, sizeof(pcap_rec_t));
     if (!queue)
     {

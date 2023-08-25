@@ -6,8 +6,6 @@
 
 #define BUILD_IN_LED GPIO_NUM_2
 
-// #define BUILD_IN_LED GPIO_NUM_8 // FOR RGB
-// #include "led_strip.h"
 
 void led_init()
 {

@@ -25,7 +25,22 @@
 			"tcp_server.h": "c",
 			"seriallib.h": "c",
 			"esp_mac.h": "c",
-			"semphr.h": "c"
+			"semphr.h": "c",
+			"event_groups.h": "c",
+			"limits.h": "c",
+			"led_lib.h": "c",
+			"gpio.h": "c",
+			"cerrno": "c",
+			"nvs.h": "c",
+			"nvs_flash.h": "c",
+			"esp_wifi.h": "c",
+			"esp_event.h": "c",
+			"console_utils.h": "c",
+			"argtable3.h": "c",
+			"esp_console.h": "c",
+			"esp_chip_info.h": "c",
+			"stdarg.h": "c",
+			"esp_wifi_types.h": "c"
 		}
 	}
 }

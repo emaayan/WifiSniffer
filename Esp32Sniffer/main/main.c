@@ -1,8 +1,12 @@
 #include <stdio.h>
 
 #include "OledDisplayUtils.h"
+
 #include "wifi_lib.h"
 #include "wifi_sniffer.h"
+
+#include "console_lib.h"
+
 #include "tcp_server.h"
 #include "SerialLib.h"
 #include "capture_lib.h"
@@ -14,10 +18,14 @@
 
 #include "../build/config/sdkconfig.h"
 #include <led_lib.h>
+
+#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32S3
+#include "led_strip.h"
+#endif
 static const char *TAG = "WifiSnifferMain";
 
 void signal_start()
-{    
+{
     sniffer_start();
 }
 
@@ -31,7 +39,7 @@ void on_socket_accept_handler(const int sock, struct sockaddr_in *so_in)
 {
     disconnect_socket(_sock);
     _sock = sock;
-    sniffer_start(); 
+    sniffer_start();
 }
 
 int on_start_capture(pcap_hdr_t pcap_hdr)
@@ -63,124 +71,14 @@ int on_capture(pcap_rec_t pcap_rec, size_t total_size)
     return total_size;
 }
 
-addrFilter_t filterAddr(char mac[], const size_t readBytes)
-{
-    addrFilter_t filter = {{}, 0};
-    if (readBytes > 0)
-    {
-        if (readBytes % 2 == 0)
-        {
-            ESP_LOGI(TAG, "read filter %s bytes read,%d", mac, readBytes);
-            size_t t = hex_to_byte_array(mac, readBytes, filter.addr);
-            filter.size = t;
-            ESP_LOG_BUFFER_HEX(TAG, filter.addr, filter.size);
-        }
-        else
-        {
-            return filter;
-        }
-    }
-    else
-    {
-        ESP_LOGI(TAG, "No filter");
-    }
-    return filter;
-}
-
-addrFilter_t read_filter(char *op, serial_messsage_t msg)
-{
-    char mac[12] = "";
-    const size_t sz = msg.size - 2;
-    strncpy(mac, op + 2, sz);
-    addrFilter_t filt = filterAddr(mac, sz);
-    return filt;
-}
-
-static const size_t OP_CODE_SIZE = 2;
-bool isOpCode(const char buff[], const char op[])
-{
-    return !strncmp(buff, op, OP_CODE_SIZE);
-}
-
-void readMessage(serial_messsage_t msg)
-{
-
-    if (msg.size >= OP_CODE_SIZE)
-    {
-
-        char *op = (char *)msg.data;
-        ESP_LOGD(TAG, "Got %s %d ", op, msg.size);
-        if (isOpCode(op, "S0"))
-        {
-            ESP_LOGI(TAG, "Got stop capture");
-            signal_stop();
-        }
-
-        if (isOpCode(op, "S1"))
-        {
-            ESP_LOGD(TAG, "Got Start capture");
-            signal_start();
-        }
-        if (isOpCode(op, "FD"))
-        {
-            sniffer_set_filter_data();
-        }
-        if (isOpCode(op, "FA"))
-        {
-            sniffer_set_no_filter();
-        }
-        if (isOpCode(op, "FC")) // SHOULD ONLY HAPPEN ON SERIAL
-        {
-            const size_t sz = msg.size - 2;
-            int ch;
-            if (sz > 0)
-            {
-                char channel[2] = "";
-                strncpy(channel, op + 2, sz);
-                ch = atoi(channel);
-            }
-            else
-            {
-                ch = 0;
-            }
-            sniffer_set_filter_channel(ch);
-        }
-
-        if (isOpCode(op, "F3"))
-        {
-            addrFilter_t filt = read_filter(op, msg);
-            if (filt.size >= 0)
-            {
-                sniffer_set_addr3_filter(filt);
-            }
-        }
-
-        if (isOpCode(op, "F2"))
-        {
-            addrFilter_t filt = read_filter(op, msg);
-            if (filt.size >= 0)
-            {
-                sniffer_set_addr2_filter(filt);
-            }
-        }
-    }
-}
-
-void on_serial_read(serial_messsage_t serMsg)
-{
-    ESP_LOGD(TAG, "port: %d,Data  %s ", serMsg.srcPort, serMsg.data);
-    readMessage(serMsg);    
-}
-
-
 void init_serials()
 {
     serial_begin_0(115200); // TODO: make sure this sets back 250000
                             // static txConfigStruct_t txConfig = {UART_NUM_0, 100, TX_TASK_SIZE, onMsgProduce};
                             //  createTxTask(&txConfig);
 
-    static rxConfigStruct_t rxConfig = {.port = UART_NUM_0, .wait = 10, .taskSize = RX_TASK_SIZE, .serial_reader = on_serial_read};
-    createRxTask(&rxConfig);
+    // static rxConfigStruct_t rxConfig = {.port = UART_NUM_0, .wait = 10, .taskSize = RX_TASK_SIZE, .serial_reader = on_serial_read};
+    // createRxTask(&rxConfig);
 }
 
 #ifdef CONFIG_WIFI_SOFTAP
@@ -243,33 +141,124 @@ void flash_init()
     ESP_ERROR_CHECK(ret);
 }
 
+#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32S3
+
+static led_strip_handle_t led_strip;
+
+static void blink_led(uint8_t s_led_state)
+{
+    /* If the addressable LED is enabled */
+    if (s_led_state)
+    {
+        /* Set the LED pixel using RGB from 0 (0%) to 255 (100%) for each color */
+        led_strip_set_pixel(led_strip, 0, 16, 16, 16);
+        /* Refresh the strip to send data */
+        led_strip_refresh(led_strip);
+    }
+    else
+    {
+        /* Set all LED off to clear all pixels */
+        led_strip_clear(led_strip);
+    }
+}
+void led_blink_rgb_slow()
+{
+    const int delay = 200;
+    blink_led(1);
+    vTaskDelay(pdMS_TO_TICKS(delay));
+    blink_led(0);
+    vTaskDelay(pdMS_TO_TICKS(delay));
+}
+void led_blink_rgb_fast()
+{
+    const int delay = 50;
+    blink_led(1);
+    vTaskDelay(pdMS_TO_TICKS(delay));
+    blink_led(0);
+    vTaskDelay(pdMS_TO_TICKS(delay));
+}
+#define BLINK_GPIO 8
+static void configure_led(void)
+{    
+    /* LED strip initialization with the GPIO and pixels number*/
+    led_strip_config_t strip_config = {
+        .strip_gpio_num = BLINK_GPIO,
+        .max_leds = 1, // at least one LED on board
+    };
+    led_strip_rmt_config_t rmt_config = {
+        .resolution_hz = 10 * 1000 * 1000, // 10MHz
+    };
+    ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip));
+    /* Set all LED off to clear all pixels */
+    ESP_ERROR_CHECK(led_strip_clear(led_strip));
+}
+#endif
+
+void queue_full_message()
+{
+#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32S3
+    led_blink_rgb_fast();
+#else
+    led_blink_fast();
+#endif
+}
+void sniffer_is_up_message()
+{
+#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32S3
+    led_blink_rgb_slow();
+#else
+    led_blink_slow();
+#endif
+}
+void sniffer_capture_started()
+{
+#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32S3
+    led_blink_rgb_slow();
+    led_blink_rgb_slow();
+#else
+    led_blink_slow();
+    led_blink_slow();
+#endif
+}
+
 void sniffer_on_event_handler(int32_t event_id, void *event_data)
 {
-    ESP_LOGI(TAG, "Got Event %" PRId32, event_id);
+    ESP_LOGD(TAG, "Got Event %" PRId32, event_id);
     switch (event_id)
     {
     case SNIFFER_EVENT_QUEUE_FULL:
-        led_blink_fast();
+        queue_full_message();
         break;
     case SNIFFER_EVENT_IS_UP:
-        led_blink_slow();
+        sniffer_is_up_message();
         break;
     case SNIFFER_EVENT_CAPTURE_STARTED:
-        led_blink_slow();
-        led_blink_slow();
+        sniffer_capture_started();
         break;
     default:
         break;
     }
 }
+
+void console_init()
+{
+    // console_config_init();
+    // console_start();
+    console_begin();
+}
+
 void setup()
 {
     ESP_LOGI(TAG, "[+] Startup...");
 
     flash_init();
+#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32S3
+    configure_led();
+#else
     led_init();
-
-    init_serials();
+#endif
+    console_init();
+    // init_serials();
 
     // initDisplay();
     // displayPrint(0, 17, "hello %s", "world");

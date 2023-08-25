@@ -25,6 +25,7 @@ import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.SQLOutput;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.BiConsumer;
@@ -117,6 +118,7 @@ public class Main {
         public void stream() {
             serialCtrl.open();
 
+
             serialCtrl.send("S1");
 
             //while (true) {
@@ -155,193 +157,240 @@ public class Main {
 
                     //System.out.println(new String(captureHeaderBytes.array()));
                 }
+            });
+        }
+    }
+
+    public static void main(String[] args) {
+
+        final int speed = 115200;
+        final String port = "COM7";
+        final SerialCtrl serialCtrl = new SerialCtrl(port, speed);
+        serialCtrl.open();
+
+
+
+
+        while (true) {
+            ByteBuffer byteBuffer=ByteBuffer.allocate(1000);
+            ByteBuffer bb = null;
+            while (bb == null || bb.capacity() == 0) {
+                bb = serialCtrl.read(1);
             }
+            if(bb.capacity()>0){
+                byteBuffer.put(bb);
+                final String s = new String(bb.array());
+                System.out.print(s);
+            }
+//            final byte b = bb.get(0);
+//            if ((b >= 'A') && (b <= 'z')) {
+//                final ByteBuffer allocate = ByteBuffer.allocate(1000);
+//                ByteBuffer read = null;
+//                while (read == null || read.capacity() == 0) {
+//                    read = serialCtrl.read(1);
+//                    if (read.capacity() > 0) {
+//                        if (read.get(0) == '\n') {
+//                            break;
+//                        }
+//                        allocate.put(read);
+//                    }
+//
+//                }
+//
+//                final String s = new String(allocate.array());
+//                System.out.print(s);
+//
+//            }
         }
 
-        public static void main(String[] args) throws InterruptedException {
-
-            final int speed = 115200;
-            final String port = "COM7";
-            final SerialCtrl serialCtrl = new SerialCtrl(port, speed);
-            serialCtrl.open();
-
-            serialCtrl.send("S1");
-
-            //while (true) {
-            final ByteBuffer captureHeaderBytes = serialCtrl.read(CaptureHeader.SIZE);
-            final Optional<CaptureHeader> captureHeader = CaptureHeader.get(captureHeaderBytes);
-            captureHeader.ifPresent(captureHeader1 -> {
-                final int magic = captureHeader1.getMagicNum();
-
-//        serialCtrl.send("F2000CCC");
-
-                if (magic == CaptureHeader.MAGIC) {
-                    //    namedPipeWrapper.write(captureHeader1.getByteBuffer());
-                    while (true) {
-
-                        final ByteBuffer payloadHeaderBytes = serialCtrl.read(PayloadHeader.SIZE);
-                        final Optional<PayloadHeader> header = PayloadHeader.get(payloadHeaderBytes);
-                        header.ifPresent(payloadHeader -> {
-                            final int origLen = payloadHeader.getOrig_len();
-
-                            //       namedPipeWrapper.write(payloadHeader.getByteBuffer());
-                            final int inclLen = payloadHeader.getIncl_len();
-
-                            final ByteBuffer payload = serialCtrl.read(inclLen);
-                            final Optional<PayloadPacket> payloadPacket1 = PayloadPacket.get(payload);
-                            payloadPacket1.ifPresent(payloadPacket -> {
-                                //           namedPipeWrapper.write(payloadPacket.getByteBuffer());
-                                System.out.printf("GOT %s ,%s\n", payloadHeader, payloadPacket);
-                            });
-
-
-                        });
-                    }
-
-
-                } else {
-                    final String x = AbstractPacket.bytesToHex(captureHeaderBytes);
-                    System.out.println(x);
-//                final byte[] bytes = AbstractPacket.hexStringToByteArray(captureHeaderBytes);
-
-                    //System.out.println(new String(captureHeaderBytes.array()));
-                }
-            });
-            //  }
-            //new CountDownLatch(1).await();
-        }
-
-        public static void main_232(String[] args) throws IOException, PipeException {
-
-            String pipeName = "\\\\.\\pipe\\wireshark";
-//        pipeName="TCP@127.0.0.1:19000";
-//        pipeName="TCP@127.0.0.1";
-            final int speed = 115200;//912600;//115200;// 250000;//912600;
-            final String port = "COM6";
-
-            //  final ConnectionWrapper namedPipeWrapper = ConnectionWrapper.NULL_WRAPPER;// new NamedPipeWrapper(pipeName);
-            final ConnectionWrapper namedPipeWrapper = new NamedPipeWrapper(pipeName);
-            //  launchWireshark(pipeName);
-            namedPipeWrapper.connect();
-
-            final SerialCtrl serialCtrl = new SerialCtrl(port, speed);
-            serialCtrl.open();
-
-            serialCtrl.send("S1");
-
-
-            final ByteBuffer captureHeaderBytes = serialCtrl.read(CaptureHeader.SIZE);
-            final Optional<CaptureHeader> captureHeader = CaptureHeader.get(captureHeaderBytes);
-            captureHeader.ifPresent(captureHeader1 -> {
-                final int magic = captureHeader1.getMagicNum();
-
-//        serialCtrl.send("F2000CCC");
-
-                if (magic == CaptureHeader.MAGIC) {
-                    namedPipeWrapper.write(captureHeader1.getByteBuffer());
-                    while (true) {
-
-                        final ByteBuffer payloadHeaderBytes = serialCtrl.read(PayloadHeader.SIZE);
-                        final Optional<PayloadHeader> header = PayloadHeader.get(payloadHeaderBytes);
-                        header.ifPresent(payloadHeader -> {
-                            final int origLen = payloadHeader.getOrig_len();
-                            if (origLen > 0) {//to be used to parse other stuff //maybe as payload type for logs
-
-                                namedPipeWrapper.write(payloadHeader.getByteBuffer());
-                                final int inclLen = payloadHeader.getIncl_len();
-
-                                final ByteBuffer payload = serialCtrl.read(inclLen);
-                                final Optional<PayloadPacket> payloadPacket1 = PayloadPacket.get(payload);
-                                payloadPacket1.ifPresent(payloadPacket -> {
-                                    namedPipeWrapper.write(payloadPacket.getByteBuffer());
-                                    System.out.printf("GOT %s ,%s\n", payloadHeader, payloadPacket);
-                                });
-
-                            } else {
-                                final int inclLen = payloadHeader.getIncl_len();
-                                final ByteBuffer payload = serialCtrl.read(inclLen);
-                                final byte[] array = payload.array();
-                                final String s = new String(array);
-                                System.out.println("Got message " + s);
-                            }
-                        });
-                    }
-
-
-                } else {
-                    System.out.println("ERROR");
-                }
-            });
-
-        }
-
-
-        private String pipeName = "\\\\.\\pipe\\wireshark";
-
-        private int speed = 250000;//912600;
-        private String port;// = "COM7";
-        private String wiresharkExec = "C:\\Program Files\\Wireshark\\Wireshark.exe";
-
-        public Main() {
-
-        }
-
-        public String getPipeName() {
-            return pipeName;
-        }
-
-        public void setPipeName(String pipeName) {
-            this.pipeName = pipeName;
-        }
-
-        public int getSpeed() {
-            return speed;
-        }
-
-        public void setSpeed(int speed) {
-            this.speed = speed;
-        }
-
-        public String getPort() {
-            return port;
-        }
-
-        public void setPort(String port) {
-            this.port = port;
-        }
-
-        public Main(String pipeName, int speed, String port) {
-            this.pipeName = pipeName;
-            this.speed = speed;
-            this.port = port;
-        }
-
-        private static String processDetails(ProcessHandle process) {
-            return String.format("%8d %8s %10s %26s %-40s",
-                    process.pid(),
-                    text(process.parent().map(ProcessHandle::pid)),
-                    text(process.info().user()),
-                    text(process.info().startInstant()),
-                    text(process.info().arguments()));
-        }
-
-        private static String text(Optional<?> optional) {
-            return optional.map(Object::toString).orElse("");
-        }
-
-        private static void launchWireshark(String pipeName) throws IOException {
-            //TODO: capture the process handl
-            //https://randomnerdtutorials.com/esp32-access-point-ap-web-server/
-            final String wiresharkExec = "C:\\Program Files\\Wireshark\\Wireshark.exe";
-            final ProcessBuilder processBuilder = new ProcessBuilder(wiresharkExec, "-i" + pipeName, "-k");
-            final Process start = processBuilder.start();
-
-
-        }
-
-        public static void main_ol8d(String[] args) throws InterruptedException {
-            Sniffer sniffer = new Sniffer();
-
-        }
 
     }
+
+    public static void main_oo(String[] args) throws InterruptedException {
+
+        final int speed = 115200;
+        final String port = "COM7";
+        final SerialCtrl serialCtrl = new SerialCtrl(port, speed);
+        serialCtrl.open();
+
+        serialCtrl.send("S1");
+
+        //while (true) {
+        final ByteBuffer captureHeaderBytes = serialCtrl.read(CaptureHeader.SIZE);
+        final Optional<CaptureHeader> captureHeader = CaptureHeader.get(captureHeaderBytes);
+        captureHeader.ifPresent(captureHeader1 -> {
+            final int magic = captureHeader1.getMagicNum();
+
+//        serialCtrl.send("F2000CCC");
+
+            if (magic == CaptureHeader.MAGIC) {
+                //    namedPipeWrapper.write(captureHeader1.getByteBuffer());
+                while (true) {
+
+                    final ByteBuffer payloadHeaderBytes = serialCtrl.read(PayloadHeader.SIZE);
+                    final Optional<PayloadHeader> header = PayloadHeader.get(payloadHeaderBytes);
+                    header.ifPresent(payloadHeader -> {
+                        final int origLen = payloadHeader.getOrig_len();
+
+                        //       namedPipeWrapper.write(payloadHeader.getByteBuffer());
+                        final int inclLen = payloadHeader.getIncl_len();
+
+                        final ByteBuffer payload = serialCtrl.read(inclLen);
+                        final Optional<PayloadPacket> payloadPacket1 = PayloadPacket.get(payload);
+                        payloadPacket1.ifPresent(payloadPacket -> {
+                            //           namedPipeWrapper.write(payloadPacket.getByteBuffer());
+                            System.out.printf("GOT %s ,%s\n", payloadHeader, payloadPacket);
+                        });
+
+
+                    });
+                }
+
+
+            } else {
+                final String x = AbstractPacket.bytesToHex(captureHeaderBytes);
+                System.out.println(x);
+//                final byte[] bytes = AbstractPacket.hexStringToByteArray(captureHeaderBytes);
+
+                //System.out.println(new String(captureHeaderBytes.array()));
+            }
+        });
+        //  }
+        //new CountDownLatch(1).await();
+    }
+
+    public static void main_232(String[] args) throws IOException, PipeException {
+
+        String pipeName = "\\\\.\\pipe\\wireshark";
+//        pipeName="TCP@127.0.0.1:19000";
+//        pipeName="TCP@127.0.0.1";
+        final int speed = 115200;//912600;//115200;// 250000;//912600;
+        final String port = "COM6";
+
+        //  final ConnectionWrapper namedPipeWrapper = ConnectionWrapper.NULL_WRAPPER;// new NamedPipeWrapper(pipeName);
+        final ConnectionWrapper namedPipeWrapper = new NamedPipeWrapper(pipeName);
+        //  launchWireshark(pipeName);
+        namedPipeWrapper.connect();
+
+        final SerialCtrl serialCtrl = new SerialCtrl(port, speed);
+        serialCtrl.open();
+
+        serialCtrl.send("S1");
+
+
+        final ByteBuffer captureHeaderBytes = serialCtrl.read(CaptureHeader.SIZE);
+        final Optional<CaptureHeader> captureHeader = CaptureHeader.get(captureHeaderBytes);
+        captureHeader.ifPresent(captureHeader1 -> {
+            final int magic = captureHeader1.getMagicNum();
+
+//        serialCtrl.send("F2000CCC");
+
+            if (magic == CaptureHeader.MAGIC) {
+                namedPipeWrapper.write(captureHeader1.getByteBuffer());
+                while (true) {
+
+                    final ByteBuffer payloadHeaderBytes = serialCtrl.read(PayloadHeader.SIZE);
+                    final Optional<PayloadHeader> header = PayloadHeader.get(payloadHeaderBytes);
+                    header.ifPresent(payloadHeader -> {
+                        final int origLen = payloadHeader.getOrig_len();
+                        if (origLen > 0) {//to be used to parse other stuff //maybe as payload type for logs
+
+                            namedPipeWrapper.write(payloadHeader.getByteBuffer());
+                            final int inclLen = payloadHeader.getIncl_len();
+
+                            final ByteBuffer payload = serialCtrl.read(inclLen);
+                            final Optional<PayloadPacket> payloadPacket1 = PayloadPacket.get(payload);
+                            payloadPacket1.ifPresent(payloadPacket -> {
+                                namedPipeWrapper.write(payloadPacket.getByteBuffer());
+                                System.out.printf("GOT %s ,%s\n", payloadHeader, payloadPacket);
+                            });
+
+                        } else {
+                            final int inclLen = payloadHeader.getIncl_len();
+                            final ByteBuffer payload = serialCtrl.read(inclLen);
+                            final byte[] array = payload.array();
+                            final String s = new String(array);
+                            System.out.println("Got message " + s);
+                        }
+                    });
+                }
+
+
+            } else {
+                System.out.println("ERROR");
+            }
+        });
+
+    }
+
+
+    private String pipeName = "\\\\.\\pipe\\wireshark";
+
+    private int speed = 250000;//912600;
+    private String port;// = "COM7";
+    private String wiresharkExec = "C:\\Program Files\\Wireshark\\Wireshark.exe";
+
+    public Main() {
+
+    }
+
+    public Main(String pipeName, int speed, String port) {
+        this.pipeName = pipeName;
+        this.speed = speed;
+        this.port = port;
+    }
+
+    public String getPipeName() {
+        return pipeName;
+    }
+
+    public void setPipeName(String pipeName) {
+        this.pipeName = pipeName;
+    }
+
+    public int getSpeed() {
+        return speed;
+    }
+
+    public void setSpeed(int speed) {
+        this.speed = speed;
+    }
+
+    public String getPort() {
+        return port;
+    }
+
+    public void setPort(String port) {
+        this.port = port;
+    }
+
+
+    private static String processDetails(ProcessHandle process) {
+        return String.format("%8d %8s %10s %26s %-40s",
+                process.pid(),
+                text(process.parent().map(ProcessHandle::pid)),
+                text(process.info().user()),
+                text(process.info().startInstant()),
+                text(process.info().arguments()));
+    }
+
+    private static String text(Optional<?> optional) {
+        return optional.map(Object::toString).orElse("");
+    }
+
+    private static void launchWireshark(String pipeName) throws IOException {
+        //TODO: capture the process handl
+        //https://randomnerdtutorials.com/esp32-access-point-ap-web-server/
+        final String wiresharkExec = "C:\\Program Files\\Wireshark\\Wireshark.exe";
+        final ProcessBuilder processBuilder = new ProcessBuilder(wiresharkExec, "-i" + pipeName, "-k");
+        final Process start = processBuilder.start();
+
+
+    }
+
+    public static void main_ol8d(String[] args) throws InterruptedException {
+        Sniffer sniffer = new Sniffer();
+
+    }
+
+}

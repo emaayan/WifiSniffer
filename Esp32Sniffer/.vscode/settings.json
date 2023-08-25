@@ -4,7 +4,7 @@
     "C_Cpp.codeAnalysis.clangTidy.enabled": false,
     "idf.adapterTargetName": "esp32c3",
     "idf.openOcdConfigs": [
-        "board/esp32c3-bridge.cfg"
+        "board/esp32c3-builtin.cfg"
     ],
     "idf.portWin": "COM10",
     "files.associations": {

@@ -31,6 +31,7 @@ public class SerialCtrl implements Closeable {
         serialPort.setNumDataBits(8);
         serialPort.setNumStopBits(1);
         serialPort.setParity(NO_PARITY);
+
         serialPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_BLOCKING, 2000, 0);
     }
 
@@ -47,12 +48,9 @@ public class SerialCtrl implements Closeable {
     public ByteBuffer read(int length) {
         final byte[] bytes = new byte[length];
         final ByteBuffer byteBuffer;
-        int i=0;
-        while(i==0){
-            i=serialPort.readBytes(bytes, bytes.length);
-        }
+        int i=serialPort.readBytes(bytes, bytes.length);;
         if (i > 0) {
-            byteBuffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
+            byteBuffer = ByteBuffer.wrap(bytes);//.order(ByteOrder.LITTLE_ENDIAN);
          //   System.out.println(AbstractPacket.bytesToHex(byteBuffer));
         } else {
             byteBuffer = ByteBuffer.allocate(0);

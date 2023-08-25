@@ -75,18 +75,21 @@ void sniffer_register_event_handler(sniffer_event_handler_t event_handler)
 
 void sniffer_set_filter(addrFilter_t addrFilter, addrFilter_t *filter)
 {
-    if (xSemaphoreTake(_filter_sem, portMAX_DELAY))
+    if (addrFilter.size >= 0)
     {
-        *filter = addrFilter;
-        ESP_LOGI(TAG,"Set filter");        
-        if (!xSemaphoreGive(_filter_sem))
+        if (xSemaphoreTake(_filter_sem, portMAX_DELAY))
         {
-            ESP_LOGE(TAG, "Error releaseing addrOwnMac semaphore");
+            *filter = addrFilter;
+            ESP_LOGD(TAG, "Set filter");
+            if (!xSemaphoreGive(_filter_sem))
+            {
+                ESP_LOGE(TAG, "Error releaseing addrOwnMac semaphore");
+            }
         }
-    }
-    else
-    {
-        ESP_LOGE(TAG, "Failed to get addrOwnMac semaphore");
+        else
+        {
+            ESP_LOGE(TAG, "Failed to get addrOwnMac semaphore");
+        }
     }
 }
 
@@ -136,7 +139,7 @@ bool filter_packet(wifi_mgmt_hdr_t *mgmt)
 static QueueHandle_t _packet_queue;
 static bool sniffer_create_queue(UBaseType_t txQSize)
 {
-    ESP_LOGI(TAG, "Sniffer Queue Size: %d",txQSize);
+    ESP_LOGI(TAG, "Sniffer Queue Size: %d", txQSize);
     QueueHandle_t queue = xQueueCreate(txQSize, sizeof(pcap_rec_t));
     if (!queue)
     {
@@ -305,7 +308,7 @@ void sniffer_set_filter_data()
     wifi_promiscuous_filter_t wifi_promiscuous_filter = {.filter_mask = WIFI_PROMIS_FILTER_MASK_DATA};
     sniffer_set_filter_packet_type(wifi_promiscuous_filter);
 }
-//no filter on packet types alone
+// no filter on packet types alone
 void sniffer_set_no_filter()
 {
     wifi_promiscuous_filter_t wifi_promiscuous_filter = {.filter_mask = WIFI_PROMIS_FILTER_MASK_ALL};

@@ -260,13 +260,13 @@ uint8_t switchChannels()
 
 void wifi_sniffer_init()
 {
-    ESP_LOGI(TAG, "Init Sniffer");
+    ESP_LOGD(TAG, "Init Sniffer");
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
 }
 
 void wifi_sniffer_deinit()
 {
-    ESP_LOGI(TAG, "deinit Sniffer");
+    ESP_LOGD(TAG, "deinit Sniffer");
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(false));
 }
 

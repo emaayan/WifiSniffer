@@ -1,20 +1,14 @@
-#include <led_lib.h>
+
+#include "led_common.h"
 
 #include "driver/gpio.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-#define BUILD_IN_LED GPIO_NUM_2
 
-
-void led_init()
+void led_init_default()
 {
-    ESP_ERROR_CHECK(gpio_set_direction(BUILD_IN_LED, GPIO_MODE_OUTPUT));
-}
-
-void led_set(uint8_t on)
-{
-    ESP_ERROR_CHECK(gpio_set_level(BUILD_IN_LED, on ? 1 : 0));
+    led_init(LED_PIN);
 }
 
 void led_blink(uint8_t delay)

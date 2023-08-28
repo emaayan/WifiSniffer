@@ -40,7 +40,11 @@
 			"esp_console.h": "c",
 			"esp_chip_info.h": "c",
 			"stdarg.h": "c",
-			"esp_wifi_types.h": "c"
+			"esp_wifi_types.h": "c",
+			"led_gpio.h": "c",
+			"led_strip.h": "c",
+			"led_rmt.h": "c",
+			"led_common.h": "c"
 		}
 	}
 }

@@ -20,9 +20,9 @@ void disconnect_socket(int sock)
     if (sock)
     {
         int ret_shut = shutdown(sock, SD_BOTH);
-        ESP_LOGI(TAG, "code during shutdown : %d ", ret_shut);
+        ESP_LOGD(TAG, "code during shutdown : %d ", ret_shut);//TODO: we get -1 find out why
         int ret_close = close(sock);
-        ESP_LOGI(TAG, "code during close : %d ", ret_close);
+        ESP_LOGD(TAG, "code during close : %d ", ret_close);
     }
 }
 

@@ -6,7 +6,7 @@
     "idf.openOcdConfigs": [
         "board/esp32c3-builtin.cfg"
     ],
-    "idf.portWin": "COM10",
+    "idf.portWin": "COM12",
     "files.associations": {
         "sdkconfig.h": "c",
         "ssd1306.h": "c",

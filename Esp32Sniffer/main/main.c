@@ -17,11 +17,8 @@
 #include "capture_lib.h"
 
 #include "../build/config/sdkconfig.h"
-#include <led_lib.h>
+#include "led_common.h"
 
-#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32S3
-#include "led_strip.h"
-#endif
 static const char *TAG = "WifiSnifferMain";
 
 void signal_start()
@@ -141,84 +138,19 @@ void flash_init()
     ESP_ERROR_CHECK(ret);
 }
 
-#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32S3
-
-static led_strip_handle_t led_strip;
-
-static void blink_led(uint8_t s_led_state)
-{
-    /* If the addressable LED is enabled */
-    if (s_led_state)
-    {
-        /* Set the LED pixel using RGB from 0 (0%) to 255 (100%) for each color */
-        led_strip_set_pixel(led_strip, 0, 16, 16, 16);
-        /* Refresh the strip to send data */
-        led_strip_refresh(led_strip);
-    }
-    else
-    {
-        /* Set all LED off to clear all pixels */
-        led_strip_clear(led_strip);
-    }
-}
-void led_blink_rgb_slow()
-{
-    const int delay = 200;
-    blink_led(1);
-    vTaskDelay(pdMS_TO_TICKS(delay));
-    blink_led(0);
-    vTaskDelay(pdMS_TO_TICKS(delay));
-}
-void led_blink_rgb_fast()
-{
-    const int delay = 50;
-    blink_led(1);
-    vTaskDelay(pdMS_TO_TICKS(delay));
-    blink_led(0);
-    vTaskDelay(pdMS_TO_TICKS(delay));
-}
-#define BLINK_GPIO 8
-static void configure_led(void)
-{    
-    /* LED strip initialization with the GPIO and pixels number*/
-    led_strip_config_t strip_config = {
-        .strip_gpio_num = BLINK_GPIO,
-        .max_leds = 1, // at least one LED on board
-    };
-    led_strip_rmt_config_t rmt_config = {
-        .resolution_hz = 10 * 1000 * 1000, // 10MHz
-    };
-    ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip));
-    /* Set all LED off to clear all pixels */
-    ESP_ERROR_CHECK(led_strip_clear(led_strip));
-}
-#endif
-
 void queue_full_message()
 {
-#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32S3
-    led_blink_rgb_fast();
-#else
     led_blink_fast();
-#endif
 }
 void sniffer_is_up_message()
 {
-#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32S3
-    led_blink_rgb_slow();
-#else
     led_blink_slow();
-#endif
 }
+
 void sniffer_capture_started()
 {
-#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32S3
-    led_blink_rgb_slow();
-    led_blink_rgb_slow();
-#else
     led_blink_slow();
     led_blink_slow();
-#endif
 }
 
 void sniffer_on_event_handler(int32_t event_id, void *event_data)
@@ -252,11 +184,7 @@ void setup()
     ESP_LOGI(TAG, "[+] Startup...");
 
     flash_init();
-#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32S3
-    configure_led();
-#else
-    led_init();
-#endif
+    led_init_default();
     console_init();
     // init_serials();
 

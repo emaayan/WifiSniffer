@@ -7,15 +7,6 @@
 #include "capture_lib.h"
 #include "console_utils.h"
 
-static const char *TAG = "ConsoleSnifferCmd";
-
-static struct
-{
-    struct arg_str *source;
-    struct arg_str *frame_type;
-    struct arg_end *end;
-} console_sniffer_filter_args;
-
 addrFilter_t console_read_filter(const char mac[], const size_t readBytes)
 {
     addrFilter_t filter = {{}, -1};
@@ -48,11 +39,20 @@ addrFilter_t console_read_filter(const char mac[], const size_t readBytes)
     return filter;
 }
 
-static struct arg_str *create_sniffer_source_arg()
+static const char *TAG = "ConsoleSnifferCmd";
+
+static struct
 {
-    return arg_str0("s", "source", "<MAC>", "source");
+    struct arg_str *source;
+    struct arg_str *frame_type;
+    struct arg_end *end;
+} console_sniffer_filter_args;
+
+static void create_sniffer_source_arg(struct arg_str **argstr)
+{
+    *argstr = arg_str0("s", "source", "<MAC>", "source");
 }
-static void console_sniffer_filter_source(struct arg_str *arg_source)
+static void console_sniffer_filter_source_arg(struct arg_str *arg_source)
 {
     if (arg_source->count > 0)
     {
@@ -64,11 +64,11 @@ static void console_sniffer_filter_source(struct arg_str *arg_source)
     }
 }
 
-static struct arg_str *create_sniffer_frame_arg()
+static void create_sniffer_frame_arg(struct arg_str **argstr)
 {
-    return arg_str0("f", "frame", "<frametype>", "Type: [ D[ata] / A[ll] ]");
+    *argstr = arg_str0("f", "frame", "<frametype>", "Type: [ D[ata] / A[ll] ]");
 }
-static void console_sniffer_filter_frame(struct arg_str *arg_frame_type)
+static void console_sniffer_filter_frame_arg(struct arg_str *arg_frame_type)
 {
     if (arg_frame_type->count > 0)
     {
@@ -91,28 +91,29 @@ static void console_sniffer_filter_frame(struct arg_str *arg_frame_type)
 
 static int console_sniffer_filter(int argc, char **argv)
 {
-    console_sniffer_filter_args.source->sval[0] = "";
-    console_sniffer_filter_args.frame_type->sval[0] = "";
+    console_reset_argstr(console_sniffer_filter_args.source);
+    console_reset_argstr(console_sniffer_filter_args.frame_type);
+
     struct arg_end *arg_end = console_sniffer_filter_args.end;
 
-    if (console_args_parse(argc, argv, (void **)&console_sniffer_filter_args, arg_end))
-    {
-        return 1;
-    }
-    else
-    {
-        console_sniffer_filter_source(console_sniffer_filter_args.source);
-        console_sniffer_filter_frame(console_sniffer_filter_args.frame_type);
-        return 0;
-    }
+    printfln("\nexecuting");
+    CONSOLE_ARGS_PARSE(argc, argv, (void **)&console_sniffer_filter_args, arg_end);
+    console_sniffer_filter_source_arg(console_sniffer_filter_args.source);
+    console_sniffer_filter_frame_arg(console_sniffer_filter_args.frame_type);
+    return 0;
+}
+
+static void console_sniffer_create_filter_args()
+{
+    create_sniffer_source_arg(&console_sniffer_filter_args.source);
+    create_sniffer_frame_arg(&console_sniffer_filter_args.frame_type);
+
+    console_reset_argend(&console_sniffer_filter_args.end);
 }
 // https://linux.die.net/man/3/argtable
-void console_register_sniffer_filter(void)
+void console_sniffer_register_filter(void)
 {
-    console_sniffer_filter_args.source = create_sniffer_source_arg();
-    console_sniffer_filter_args.frame_type = create_sniffer_frame_arg();
-    console_sniffer_filter_args.end = arg_end(2);
-
+    console_sniffer_create_filter_args();
     const esp_console_cmd_t sniffer_filter_cmd = {
         .command = "filter",
         .help = "Filter MACS and frame types\n",

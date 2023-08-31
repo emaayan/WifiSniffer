@@ -14,6 +14,15 @@ int console_args_parse(int argc, char **argv, void **argtable, struct arg_end *a
     }
     return nerrors;
 }
+void console_reset_argstr(struct arg_str *argstr)
+{
+    argstr->sval[0] = "";
+}
+
+void console_reset_argend(struct arg_end **argend)
+{
+    *argend = arg_end(2);
+}
 
 void printfln(const char *fmt, ...)
 {

@@ -15,7 +15,7 @@
 #include "wifi_sniffer.h"
 #include "console_utils.h"
 #include "console_sniffer_cmd.h"
-
+#include "console_wifi_cmd.h"
 
 #define CONSOLE_UART_NUM CONFIG_ESP_CONSOLE_UART_NUM
 #define CONSOLE_UART_BUAD 115200
@@ -29,8 +29,8 @@ static const char *TAG = "ConsoleLib";
 void console_begin()
 {
     
-    console_register_sniffer_filter();
-
+    console_sniffer_register_filter();
+    console_wifi_register_ap_cmd();
     console_register_common();
     esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
     repl_config.prompt = CONSOLE_PROMPT;

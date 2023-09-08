@@ -244,25 +244,33 @@ void wifi_init()
 
 void wifi_get_mac(uint8_t mac[])
 {
-    ESP_ERROR_CHECK(esp_netif_get_mac(get_net_if(), mac));
+    esp_netif_t *esp_netif = get_net_if();
+    if (esp_netif)
+    {
+        ESP_ERROR_CHECK(esp_netif_get_mac(get_net_if(), mac));
+    }
 }
 
 void wifi_get_ip(char msg[], size_t sz)
 {
     esp_netif_ip_info_t ipInfo;
-    ESP_ERROR_CHECK(esp_netif_get_ip_info(get_net_if(), &ipInfo));
-    snprintf(msg, sz, "" IPSTR, IP2STR(&ipInfo.ip));
+    esp_netif_t *esp_netif = get_net_if();
+    if (esp_netif)
+    {
+        ESP_ERROR_CHECK(esp_netif_get_ip_info(esp_netif, &ipInfo));
+        snprintf(msg, sz, "" IPSTR, IP2STR(&ipInfo.ip));
+    }
 }
 
 // static bool ap_mode_started = false;
 void wifi_ap(const ssid_cfg_t ssid_cfg, uint8_t channel, esp_netif_ip_info_t ip, dns_servers_info_t dns_servers_info)
 {
-    ESP_LOGI(TAG, "Setting SoftAP");    
+    ESP_LOGI(TAG, "Setting SoftAP");
     ESP_ERROR_CHECK(esp_wifi_stop());
     destroy_net_if();
     ESP_LOGI(TAG, "Waiting for SoftAP to be stopped");
-    EventBits_t bits = 0;   
-    {        
+    EventBits_t bits = 0;
+    {
         esp_netif_t *esp_netif = wifi_soft_ap(ssid_cfg, channel);
         ESP_ERROR_CHECK(esp_wifi_start());
         wifi_nvs_set_mode(WIFI_LIB_MODE_AP);
@@ -286,7 +294,7 @@ void wifi_ap(const ssid_cfg_t ssid_cfg, uint8_t channel, esp_netif_ip_info_t ip,
 
 void wifi_sta(const ssid_cfg_t ssid_cfg_sta)
 {
-    ESP_LOGI(TAG, "Setting STA mode");    
+    ESP_LOGI(TAG, "Setting STA mode");
     ESP_ERROR_CHECK(esp_wifi_stop());
     destroy_net_if();
     esp_netif_t *esp_netif = wifi_set_sta(ssid_cfg_sta);
@@ -313,8 +321,8 @@ void wifi_set_mode(wifi_lib_mode_t wifi_lib_mode)
     {
     case WIFI_LIB_MODE_AP:
     {
-        ESP_LOGI(TAG, "Settign mode AP");
-        ssid_cfg_t ssid_cfg = wifi_nvs_get_ssid_sta_cfg();
+        ESP_LOGI(TAG, "Setting mode AP");
+        ssid_cfg_t ssid_cfg = wifi_nvs_get_ssid_ap_cfg();
         uint8_t channel = wifi_nvs_get_ap_channel();
         esp_netif_ip_info_t esp_netif_ip_info = wifi_nvs_get_static_ip_info();
         dns_servers_info_t dns_servers_info = wifi_nvs_get_dns_servers();
@@ -323,13 +331,13 @@ void wifi_set_mode(wifi_lib_mode_t wifi_lib_mode)
     break;
     case WIFI_LIB_MODE_STA:
     {
-        ESP_LOGI(TAG, "Settign mode STA");
+        ESP_LOGI(TAG, "Setting mode STA");
         ssid_cfg_t ssid_cfg = wifi_nvs_get_ssid_sta_cfg();
         wifi_sta(ssid_cfg);
         break;
     }
     case WIFI_LIB_MODE_NONE:
-        ESP_LOGI(TAG, "Settign mode NONE");
+        ESP_LOGI(TAG, "Setting mode NONE");
         break;
     default:
         ESP_LOGE(TAG, "Unsupported Mode");

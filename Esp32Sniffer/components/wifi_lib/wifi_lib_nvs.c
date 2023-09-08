@@ -34,8 +34,8 @@ wifi_lib_mode_t wifi_nvs_set_mode(wifi_lib_mode_t value)
 }
 wifi_lib_mode_t wifi_nvs_get_mode()
 {
-    int32_t value = WIFI_LIB_MODE_NONE;
-    nvs_get_num32i(WIFI_NS, "mode", &value, WIFI_LIB_MODE_NONE);
+    int32_t value = CONFIG_DEF_MODE;
+    nvs_get_num32i(WIFI_NS, "mode", &value, value);
     return value;
 }
 

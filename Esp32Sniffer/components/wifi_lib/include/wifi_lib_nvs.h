@@ -10,8 +10,15 @@
 #define SSID_SZ 32
 #define SSID_PASS_SZ 64
 
-// #ifdef CONFIG_WIFI_SOFTAP
+typedef enum
+{
+    WIFI_LIB_MODE_NONE = 0,
+    WIFI_LIB_MODE_STA,
+    WIFI_LIB_MODE_AP,
+} wifi_lib_mode_t;
 
+
+#define CONFIG_DEF_MODE WIFI_LIB_MODE_AP
 #define CONFIG_DEF_AP_SSID CONFIG_SOFTAP_WIFI_SSID
 #define CONFIG_DEF_AP_SSID_PW CONFIG_SOFTAP_WIFI_PASSWORD
 #define CONFIG_ESP_WIFI_CHANNEL CONFIG_SOFTAP_WIFI_CHANNEL
@@ -20,13 +27,9 @@
 #define CONFIG_STATIC_NETMASK_ADDR "255.255.255.0"
 #define CONFIG_MAIN_DNS_SERVER ""   //"1.1.1.1"
 #define CONFIG_BACKUP_DNS_SERVER "" //"8.8.8.8"
-
-// #endif
-
-// #ifdef CONFIG_WIFI_STA
 #define CONFIG_DEF_STA_SSID CONFIG_STA_WIFI_SSID
 #define CONFIG_DEF_STA_SSID_PW CONFIG_STA_WIFI_PASSWORD
-// #endif
+
 
 typedef struct
 {
@@ -42,12 +45,7 @@ typedef struct
     esp_ip4_addr_t secondery_dns;
 } dns_servers_info_t;
 
-typedef enum
-{
-    WIFI_LIB_MODE_NONE = 0,
-    WIFI_LIB_MODE_STA,
-    WIFI_LIB_MODE_AP,
-} wifi_lib_mode_t;
+
 bool wifi_is_valid_ip(esp_ip4_addr_t esp_ip4_addr);
 
 wifi_lib_mode_t wifi_nvs_set_mode(wifi_lib_mode_t wifi_lib_mode);

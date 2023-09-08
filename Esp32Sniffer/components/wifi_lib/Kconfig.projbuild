@@ -1,0 +1,65 @@
+menu "Wifi Initial Configuration"
+	
+
+	choice WIFI_CONNECT_METHOD
+		prompt "Wifi Connectiom Method"
+		default WIFI_SOFTAP
+		help
+			Connection Method
+
+		config WIFI_NONE
+			bool "None"
+		config WIFI_SOFTAP
+			bool "SoftAp"
+		config WIFI_STA
+			bool "Station"
+	endchoice
+
+	config SOFTAP_WIFI_SSID
+		depends on WIFI_SOFTAP
+        string "WiFi AP SSID"
+        default "sniff"
+        help
+            SSID prefix  (network name).
+
+    config SOFTAP_WIFI_PASSWORD
+		depends on WIFI_SOFTAP
+        string "WiFi Password"
+        default "mypassword"
+        help
+            WiFi password (WPA or WPA2) for soft ap.
+
+    config SOFTAP_WIFI_CHANNEL
+	
+        int "Soft AP WiFi Channel"
+        range 1 13
+        default 1
+        help
+            WiFi channel (network channel).
+
+	config SOFTAP_WIFI_IP
+		
+		string "IP For SoftAP"
+		default "192.168.19.1"
+		help
+			Initial IP for Soft AP mode.
+
+    config MAX_STA_CONN_TO_AP		
+        int "Maximal STA connections"
+        default 4
+        help
+            Max number of the STA connects to AP.
+
+	config STA_WIFI_SSID		
+		string "WiFi SSID"
+		default "ssidtojoin"
+		help
+			SSID (network name).
+
+	config STA_WIFI_PASSWORD		
+		string "Station WiFi Password"
+		default "mypassword"
+		help
+			WiFi password (WPA or WPA2).
+
+endmenu

@@ -108,10 +108,10 @@ static void console_sniffer_create_filter_args()
     create_sniffer_source_arg(&console_sniffer_filter_args.source);
     create_sniffer_frame_arg(&console_sniffer_filter_args.frame_type);
 
-    console_reset_argend(&console_sniffer_filter_args.end);
+    console_create_argend(&console_sniffer_filter_args.end);
 }
 // https://linux.die.net/man/3/argtable
-void console_sniffer_register_filter(void)
+static void console_sniffer_register_filter()
 {
     console_sniffer_create_filter_args();
     const esp_console_cmd_t sniffer_filter_cmd = {
@@ -122,4 +122,9 @@ void console_sniffer_register_filter(void)
         .argtable = &console_sniffer_filter_args};
 
     ESP_ERROR_CHECK(esp_console_cmd_register(&sniffer_filter_cmd));
+}
+
+void console_sniffer_register_cmd()
+{
+    console_sniffer_register_filter();
 }

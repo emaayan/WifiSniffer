@@ -1,2 +1,2 @@
-idf_component_register(SRCS "SerialLib.c"
+idf_component_register(SRCS "serial_lib.c"
                     INCLUDE_DIRS "include" REQUIRES driver)

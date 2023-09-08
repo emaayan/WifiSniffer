@@ -1,0 +1,6 @@
+#ifndef E71C5A5B_ACD6_435B_ABAD_AD6AD8FA549F
+#define E71C5A5B_ACD6_435B_ABAD_AD6AD8FA549F
+
+void console_wifi_register_set_sta_cmd();
+
+#endif /* E71C5A5B_ACD6_435B_ABAD_AD6AD8FA549F */

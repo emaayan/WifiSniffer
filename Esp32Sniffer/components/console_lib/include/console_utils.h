@@ -9,8 +9,10 @@ void printfln(const char *fmt, ...);
 
 void console_register_common();
 void console_reset_argstr(struct arg_str *argstr);
-void console_reset_argend(struct arg_end **argend);
-
+void console_reset_argint(struct arg_int *argint);
+void console_create_argend(struct arg_end **argend);
+void console_create_password_arg(struct arg_str **argstr);
+void console_create_enable_arg(struct arg_lit **arglit);
 #define CONSOLE_ARGS_PARSE(_ARGC, _ARGV, _ARGTABLE, _ARG_END)   \
     do                                                          \
     {                                                           \

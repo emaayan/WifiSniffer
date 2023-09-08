@@ -1,5 +1,7 @@
 #ifndef C49220B4_2EA4_45AD_82A2_2D9C4CAA11C9
 #define C49220B4_2EA4_45AD_82A2_2D9C4CAA11C9
 
-void console_wifi_register_ap_cmd();
+void console_wifi_register_cmd();
+
+
 #endif /* C49220B4_2EA4_45AD_82A2_2D9C4CAA11C9 */

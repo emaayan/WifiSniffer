@@ -18,6 +18,8 @@
 #include "esp_log.h"
 #include "esp_mac.h"
 
+#include <limits.h>
+
 #include "../../build/config/sdkconfig.h"
 
 static const char *TAG = "WifiSniffer";
@@ -168,22 +170,32 @@ bool sniffer_add_queue(pcap_rec_t *msg)
     }
 }
 
-#include <limits.h>
 unsigned rotate(unsigned short x, unsigned shift)
 {
     return (x >> shift) |
            (x << ((sizeof(x) * CHAR_BIT - shift) %
                   (sizeof(x) * CHAR_BIT)));
 }
+
 seq_ctrl_t get_seq(int16_t seqctl)
 {
-    seq_ctrl_t seq_ctrl; // = {};
     int16_t sq = rotate(seqctl, 4);
-    seq_ctrl.seq = sq & 0x0FFF;
-    seq_ctrl.frag = (sq & 0xF000) >> 12;
+    seq_ctrl_t seq_ctrl = {.seq = sq & 0x0FFF, .frag = (sq & 0xF000) >> 12};
     return seq_ctrl;
 }
 
+int sniffer_to_string(wifi_promiscuous_pkt_t *pkt, char *buff, size_t sz)
+{
+    wifi_mgmt_hdr_t *mgmt = (wifi_mgmt_hdr_t *)pkt->payload;    
+    uint8_t *ta = mgmt->ta;
+    int16_t seq_ctrl=mgmt->seqctl;
+    seq_ctrl_t sq = get_seq(seq_ctrl);
+    int16_t rssi = pkt->rx_ctrl.rssi;
+    uint8_t channel=pkt->rx_ctrl.channel;
+    int ret=snprintf(buff,sz,"ADDR2=" MACSTR ",seq=%d:%d , RSSI=%d ,Channel=%d ", MAC2STR(ta),sq.seq, sq.frag, rssi, channel);
+    return ret;
+    // ESP_LOGI(TAG, "ADDR2=" MACSTR " , RSSI=%d ,Channel=%d ,seq=%d:%d", MAC2STR(mgmt->ta), pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel, sq.seq, sq.frag);
+}
 void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type)
 {
     wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *)buff;

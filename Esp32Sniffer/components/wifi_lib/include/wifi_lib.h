@@ -13,22 +13,14 @@
 
 #include "lwip/ip_addr.h"
 
-#include "../../build/config/sdkconfig.h"
-
-typedef struct
-{
-    uint8_t ssid[32];
-    uint8_t ssid_sz;
-    uint8_t password[64];
-    uint8_t pass_sz;
-} ssid_cfg_t;
+#include "wifi_lib_nvs.h"
 
 void wifi_init();
-typedef void(* onMessage)(char *msg);
+void wifi_set_mode(wifi_lib_mode_t wifi_lib_mode);
+typedef void (*onMessage)(char *msg);
 void wifi_get_mac(uint8_t mac[]);
 void wifi_get_ip(char msg[], size_t sz);
-void wifi_get_ssid(ssid_cfg_t *ssid_cfg);
-void wifi_softAP(const ssid_cfg_t ssid_cfg, uint8_t channel, const char *ip_address, const char *netmask, const char *gw, const char *primary_dns, const char *second_dns);
+void wifi_ap(const ssid_cfg_t ssid_cfg, uint8_t channel, esp_netif_ip_info_t ip, dns_servers_info_t dns_servers_info);
 void wifi_sta(const ssid_cfg_t ssid_cfg_sta);
 
 // void wifi_init_setup_config();

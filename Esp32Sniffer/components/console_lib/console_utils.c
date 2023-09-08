@@ -14,12 +14,26 @@ int console_args_parse(int argc, char **argv, void **argtable, struct arg_end *a
     }
     return nerrors;
 }
+
+void console_reset_argint(struct arg_int *argint)
+{
+    argint->ival[0] = 0;
+}
 void console_reset_argstr(struct arg_str *argstr)
 {
     argstr->sval[0] = "";
 }
 
-void console_reset_argend(struct arg_end **argend)
+void console_create_enable_arg(struct arg_lit **arglit)
+{
+    *arglit = arg_lit0("e", "enable", "enable");
+}
+
+void console_create_password_arg(struct arg_str **argstr)
+{
+    *argstr = arg_str0("p", "password", "<password>", "password");
+}
+void console_create_argend(struct arg_end **argend)
 {
     *argend = arg_end(2);
 }
@@ -96,6 +110,18 @@ void console_register_version(void)
     };
     ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
 }
+
+void console_register_nvs_values(void)
+{
+    const esp_console_cmd_t cmd = {
+        .command = "nvs-value",
+        .help = "Show nvsValue",
+        .hint = NULL,
+        .func = &get_version,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
+}
+
 void console_register_common()
 {
     esp_console_register_help_command();

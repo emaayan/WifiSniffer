@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
+
 #include "esp_event.h"
 #include "esp_wifi_types.h"
 
@@ -55,7 +56,7 @@ void sniffer_set_own_mac_filter(addrFilter_t addrFilter);
 void sniffer_set_addr2_filter(addrFilter_t addrFilter);
 void sniffer_set_addr3_filter(addrFilter_t addrFilter);
 typedef void (*sniffer_event_handler_t)(int32_t event_id, void *event_data);
-void sniffer_init_config(addrFilter_t ownMac,sniffer_event_handler_t sniffer_event_handler);
+void sniffer_init_config(addrFilter_t ownMac, sniffer_event_handler_t sniffer_event_handler);
 void sniffer_set_filter_channel(uint8_t channel);
 void sniffer_start();
 void sniffer_stop();
@@ -72,4 +73,7 @@ typedef enum
 void sniffer_register_event_handler(sniffer_event_handler_t event_handler);
 void sniffer_set_filter_data();
 void sniffer_set_no_filter();
+int sniffer_to_string(wifi_promiscuous_pkt_t *pkt, char *buff, size_t sz);
+
+
 #endif /* FBDBBFED_1F93_4B01_BD14_CA78B2A8298C */

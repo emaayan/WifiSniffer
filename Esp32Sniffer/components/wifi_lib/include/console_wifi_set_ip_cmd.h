@@ -1,0 +1,6 @@
+#ifndef B17BF650_8BE6_44D5_B4FF_B44A723F2F65
+#define B17BF650_8BE6_44D5_B4FF_B44A723F2F65
+
+void console_wifi_register_set_ip_cmd();
+
+#endif /* B17BF650_8BE6_44D5_B4FF_B44A723F2F65 */

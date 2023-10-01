@@ -3,14 +3,21 @@
 
 #include "../../build/config/sdkconfig.h"
 
-
-#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32S3
+//#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32S3
+#ifdef CONFIG_BLINK_LED_RMT
+#define LED_PIN CONFIG_BLINK_GPIO
 #include "led_rmt.h"
-#else
+#endif
+#ifdef CONFIG_BLINK_LED_GPIO
+#define LED_PIN CONFIG_BLINK_GPIO
 #include <led_gpio.h>
 #endif
+#ifdef CONFIG_BLINK_LED_MOCK
+#define LED_PIN 0
+#include <led_mock.h>
+#endif
 
-#define LED_PIN CONFIG_BLINK_GPIO
+
 
 void led_init_default();
 void led_blink(uint8_t delay);

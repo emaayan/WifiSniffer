@@ -7,9 +7,11 @@
 #include <stdint.h>
 #include <stddef.h>
 
-
+#include "capture_lib.h"
 #include "esp_event.h"
 #include "esp_wifi_types.h"
+
+#include "wifi_sniffer_nvs.h"
 
 typedef struct
 {
@@ -18,11 +20,7 @@ typedef struct
 } seq_ctrl_t;
 seq_ctrl_t get_seq(int16_t seqctl);
 
-typedef struct
-{
-    uint8_t addr[6];
-    int size;
-} addrFilter_t;
+
 
 typedef struct
 {
@@ -52,28 +50,45 @@ typedef struct // any change in fields above need to change here
     uint8_t payload[100]; // place for actuall log
 } __attribute__((packed)) log_hdr_t;
 
-void sniffer_set_own_mac_filter(addrFilter_t addrFilter);
-void sniffer_set_addr2_filter(addrFilter_t addrFilter);
-void sniffer_set_addr3_filter(addrFilter_t addrFilter);
 typedef void (*sniffer_event_handler_t)(int32_t event_id, void *event_data);
-void sniffer_init_config(addrFilter_t ownMac, sniffer_event_handler_t sniffer_event_handler);
-void sniffer_set_filter_channel(uint8_t channel);
-void sniffer_start();
-void sniffer_stop();
-
+void sniffer_register_event_handler(sniffer_event_handler_t event_handler);
 ESP_EVENT_DECLARE_BASE(SNIFFER_EVENT);
 typedef enum
 {
     SNIFFER_EVENT_QUEUE_FULL,
     SNIFFER_EVENT_CAPTURE_STARTED,
     SNIFFER_EVENT_CAPTURE_STOPPED,
-    SNIFFER_EVENT_IS_UP
+    SNIFFER_EVENT_IS_UP,
+    SNIFFER_EVENT_FILTER_CHANGED
 } sniffer_event_types_t;
 
-void sniffer_register_event_handler(sniffer_event_handler_t event_handler);
+
 void sniffer_set_filter_data();
 void sniffer_set_no_filter();
 int sniffer_to_string(wifi_promiscuous_pkt_t *pkt, char *buff, size_t sz);
 
 
+void sniffer_set_own_mac_filter(addrFilter_t addrFilter);
+void sniffer_set_addr2_filter(addrFilter_t addrFilter);
+void sniffer_set_addr3_filter(addrFilter_t addrFilter);
+
+void sniffer_init_config(addrFilter_t ownMac, sniffer_event_handler_t sniffer_event_handler);
+void sniffer_set_filter_channel(uint8_t channel);
+void sniffer_start();
+void sniffer_stop();
+
+typedef struct
+{
+    seq_ctrl_t sq;
+    char ta[20];
+    char addr3[20];
+    rssi_t rssi;
+    int16_t fctl;
+    uint8_t channel;
+} sniffer_packet_t;
+
+sniffer_packet_t sniffer_to_packet_data(pcap_rec_t msg);
+void sniffer_set_rssi_filter(rssi_t rssi);
+addrFilter_t sniffer_get_addr2_filter();
+rssi_t sniffer_get_rssi_filter();
 #endif /* FBDBBFED_1F93_4B01_BD14_CA78B2A8298C */

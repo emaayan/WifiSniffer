@@ -5,7 +5,7 @@ menu "Led Configuration"
     choice BLINK_LED
         prompt "Blink LED type"
         default BLINK_LED_GPIO if IDF_TARGET_ESP32 || IDF_TARGET_ESP32C2
-        default BLINK_LED_RMT
+        default BLINK_LED_RMT if IDF_TARGET_ESP32S3 || IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32S2
         help
             Defines the default peripheral for blink example
 
@@ -13,9 +13,12 @@ menu "Led Configuration"
             bool "GPIO"
         config BLINK_LED_RMT
             bool "RMT - Addressable LED"
+        config BLINK_LED_MOCK
+            bool "No LED"
     endchoice
 
     config BLINK_GPIO
+        depends on BLINK_LED_GPIO || BLINK_LED_RMT
         int "Blink GPIO number"
         range ENV_GPIO_RANGE_MIN ENV_GPIO_OUT_RANGE_MAX
         default 8 if IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32H2 || IDF_TARGET_ESP32C2

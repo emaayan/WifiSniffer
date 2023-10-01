@@ -20,8 +20,8 @@ typedef struct pcap_capture_header
 
 typedef struct pcap_rec_header
 {
-    const uint32_t ts_sec;   /* timestamp seconds */
-    const uint32_t ts_usec;  /* timestamp microseconds */
+    uint32_t ts_sec;   /* timestamp seconds */
+    uint32_t ts_usec;  /* timestamp microseconds */
     uint32_t incl_len; /* number of octets of packet saved in file */
     uint32_t orig_len;       /* actual length of packet */
 } pcap_rec_hdr_t;
@@ -70,7 +70,6 @@ typedef int (*on_capture_cb)(pcap_rec_t pcaprec, size_t total_size);
 void capture_set_cb(on_start_capture_cb on_start_capture_cb, on_capture_cb on_capture_cb);
 void capture_start();
 
-pcap_rec_t capture_create_packet(uint32_t len, uint8_t *buf);
 int capture_on_send(pcap_rec_t pcap_rec);
 pcap_rec_t capture_create_pcap_record(wifi_promiscuous_pkt_t *pkt);
 

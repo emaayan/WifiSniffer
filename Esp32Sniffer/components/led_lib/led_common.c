@@ -21,7 +21,7 @@ void led_blink(uint8_t delay)
 
 void led_blink_fast()
 {
-    led_blink(10);
+   led_blink(10);
 }
 void led_blink_slow()
 {

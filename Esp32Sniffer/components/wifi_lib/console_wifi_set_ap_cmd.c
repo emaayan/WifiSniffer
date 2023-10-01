@@ -3,10 +3,9 @@
 #include "console_utils.h"
 #include "wifi_lib.h"
 
-
 static struct
 {
-    struct arg_lit *enable;
+
     struct arg_str *ssid;
     struct arg_str *password;
     struct arg_int *channel;
@@ -21,52 +20,14 @@ static void console_wifi_reset_set_ap_args()
     console_reset_argint(console_wifi_set_ap_args.channel);
 }
 
-
-static void console_wifi_set_ap_enable_arg(struct arg_lit *arg_enable)
-{
-    if (arg_enable->count > 0)
-    {        
-        printfln("Enabled Soft AP");
-        wifi_set_mode(WIFI_LIB_MODE_AP);
-    }
-}
-
 static void console_wifi_create_ssid_arg(struct arg_str **argstr)
 {
-    *argstr = arg_str0("s", "ssid", "<SSID>", "ssid the sniffer will publish");
-}
-static void console_wifi_set_ap_ssid_arg(struct arg_str *arg_ssid)
-{
-    if (arg_ssid->count > 0)
-    {
-        const char *value = arg_ssid->sval[0];
-        size_t len = strlen(value);
-        wifi_nvs_set_ap_ssid(value, len);
-    }
-}
-
-
-static void console_wifi_set_ap_password_arg(struct arg_str *arg_password)
-{
-    if (arg_password->count > 0)
-    {
-        const char *value = arg_password->sval[0];
-        size_t len = strlen(value);
-        wifi_nvs_set_ap_ssid_pw(value, len);
-    }
+    *argstr = arg_str0("s", "ssid", "<SSID>", "ssid that will be published");
 }
 
 static void console_wifi_create_ap_channel_arg(struct arg_int **argint)
 {
     *argint = arg_int0("c", "channel", "<channel>", "channel number");
-}
-static void console_wifi_set_ap_channel_arg(struct arg_int *arg_channel)
-{
-    if (arg_channel->count > 0)
-    { // TODO: MAKE VALIDATION OF CHANNEL RANGE
-        int value = arg_channel->ival[0];
-        wifi_nvs_set_ap_channel(value);
-    }
 }
 
 static int console_wifi_exec_set_ap(int argc, char **argv)
@@ -77,17 +38,46 @@ static int console_wifi_exec_set_ap(int argc, char **argv)
 
     printfln("\nexecuting ap soft");
     CONSOLE_ARGS_PARSE(argc, argv, (void **)&console_wifi_set_ap_args, arg_end);
+    
+    char ssid[SSID_SZ] = "";
+    if (console_wifi_set_ap_args.ssid->count > 0)
+    {
+        const char *value = console_wifi_set_ap_args.ssid->sval[0];        
+        strncpy(ssid, value, sizeof(ssid));
+    }
+    else
+    {
+        wifi_nvs_get_ap_ssid(ssid, sizeof(ssid));
+    }
 
-    console_wifi_set_ap_ssid_arg(console_wifi_set_ap_args.ssid);
-    console_wifi_set_ap_password_arg(console_wifi_set_ap_args.password);
-    console_wifi_set_ap_channel_arg(console_wifi_set_ap_args.channel);
-    console_wifi_set_ap_enable_arg(console_wifi_set_ap_args.enable); // if enabled also execute actuall command with paramters
+    char password[SSID_PASS_SZ] = "";
+    if (console_wifi_set_ap_args.password->count > 0)
+    {
+        const char *value = console_wifi_set_ap_args.password->sval[0];        
+        strncpy(password, value, sizeof(password));
+    }
+    else
+    {
+        wifi_nvs_get_ap_ssid_pw(password, sizeof(password));
+    }
+    ssid_cfg_t ssid_cfg=convert_to_ssid_cfg(ssid,sizeof(ssid),password,sizeof(password));
+    int ch;
+    if (console_wifi_set_ap_args.channel->count > 0)
+    {
+        ch = console_wifi_set_ap_args.channel->ival[0];
+    }
+    else
+    {
+        ch = wifi_nvs_get_ap_channel();
+    }
+    esp_netif_ip_info_t esp_netif_ip_info=wifi_nvs_get_static_ip_info();
+    dns_servers_info_t dns_servers_info=wifi_nvs_get_dns_servers();
+    wifi_ap(ssid_cfg,ch,esp_netif_ip_info,dns_servers_info);    
     return 0;
 }
 
 static void console_wifi_create_set_ap_args()
-{
-    console_create_enable_arg(&console_wifi_set_ap_args.enable);
+{    
     console_wifi_create_ssid_arg(&console_wifi_set_ap_args.ssid);
     console_create_password_arg(&console_wifi_set_ap_args.password);
     console_wifi_create_ap_channel_arg(&console_wifi_set_ap_args.channel);

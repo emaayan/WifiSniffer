@@ -14,7 +14,7 @@ bool wifi_is_valid_ip(esp_ip4_addr_t esp_ip4_addr)
 {
     return esp_ip4_addr.addr != IPADDR_NONE;
 }
-static bool wifi_is_valid_ip_info(esp_netif_ip_info_t esp_netif_ip_info)
+bool wifi_is_valid_ip_info(esp_netif_ip_info_t esp_netif_ip_info)
 {
     return wifi_is_valid_ip(esp_netif_ip_info.ip) && wifi_is_valid_ip(esp_netif_ip_info.netmask) && wifi_is_valid_ip(esp_netif_ip_info.gw);
 }
@@ -23,12 +23,12 @@ wifi_lib_mode_t wifi_nvs_set_mode(wifi_lib_mode_t value)
 {
     wifi_lib_mode_t prev_wifi_lib_mode = wifi_nvs_get_mode();
     if (prev_wifi_lib_mode != value)
-    {        
+    {
         ESP_ERROR_CHECK(nvs_set_num32i(WIFI_NS, "mode", value));
     }
     else
     {
-        ESP_LOGI(TAG, "Mode not changed");
+        ESP_LOGD(TAG, "Mode not changed");
     }
     return value;
 }
@@ -65,7 +65,7 @@ static void wifi_nvs_set_ssid(const char *key, const char *value, size_t sz, con
     }
     else
     {
-        ESP_LOGI(TAG, "SSID not changed in NVS %s ",key);
+        ESP_LOGD(TAG, "SSID not changed in NVS %s ", key);
     }
 }
 static void wifi_nvs_set_ssid_pw(const char *key, const char *value, size_t sz, const char *def_value)
@@ -81,7 +81,7 @@ static void wifi_nvs_set_ssid_pw(const char *key, const char *value, size_t sz, 
     }
     else
     {
-        ESP_LOGI(TAG, "SSID password not changed in NVS %s ",key);
+        ESP_LOGD(TAG, "SSID password not changed in NVS %s ", key);
     }
 }
 
@@ -121,39 +121,40 @@ void wifi_nvs_get_sta_ssid_pw(char *value, size_t sz)
     wifi_nvs_get_ssid_pw("sta-ssid-pw", value, CONFIG_DEF_STA_SSID_PW, sz);
 }
 
-static ssid_cfg_t get_ssid_cfg(char *nvs_ssid, size_t nvs_ssid_sz, char *nvs_ssid_pw, size_t nvs_ssid_pw_sz)
+ssid_cfg_t convert_to_ssid_cfg(char *nvs_ssid, size_t nvs_ssid_sz, char *nvs_ssid_pw, size_t nvs_ssid_pw_sz)
 {
     ssid_cfg_t ssid_cfg;
     strncpy((char *)ssid_cfg.ssid, nvs_ssid, nvs_ssid_sz);
     ssid_cfg.ssid_sz = strlen((char *)ssid_cfg.ssid);
     strncpy((char *)ssid_cfg.password, nvs_ssid_pw, nvs_ssid_pw_sz);
     ssid_cfg.pass_sz = strlen((char *)ssid_cfg.password);
+    ESP_LOGI(TAG,"Using %s",ssid_cfg.ssid);
     return ssid_cfg;
 }
 ssid_cfg_t wifi_nvs_get_ssid_sta_cfg()
 {
     char nvs_ssid[SSID_SZ] = "";
     wifi_nvs_get_sta_ssid(nvs_ssid, sizeof(nvs_ssid));
-    ESP_LOGI(TAG, "ssid FROM nvs is %s", nvs_ssid);
+    ESP_LOGD(TAG, "ssid FROM nvs is %s", nvs_ssid);
 
     char nvs_ssid_pw[SSID_PASS_SZ] = "";
     wifi_nvs_get_sta_ssid_pw(nvs_ssid_pw, sizeof(nvs_ssid_pw));
-    ESP_LOGI(TAG, "ssid pw FROM nvs is %s", nvs_ssid_pw);
+    ESP_LOGD(TAG, "ssid pw FROM nvs is %s", nvs_ssid_pw);
 
-    ssid_cfg_t ssid_cfg = get_ssid_cfg(nvs_ssid, sizeof(nvs_ssid), nvs_ssid_pw, sizeof(nvs_ssid_pw));
+    ssid_cfg_t ssid_cfg = convert_to_ssid_cfg(nvs_ssid, sizeof(nvs_ssid), nvs_ssid_pw, sizeof(nvs_ssid_pw));
     return ssid_cfg;
 }
 ssid_cfg_t wifi_nvs_get_ssid_ap_cfg()
 {
     char nvs_ssid[SSID_SZ] = "";
     wifi_nvs_get_ap_ssid(nvs_ssid, sizeof(nvs_ssid));
-    ESP_LOGI(TAG, "ssid FROM nvs is %s", nvs_ssid);
+    ESP_LOGD(TAG, "ssid FROM nvs is %s", nvs_ssid);
 
     char nvs_ssid_pw[SSID_PASS_SZ] = "";
     wifi_nvs_get_ap_ssid_pw(nvs_ssid_pw, sizeof(nvs_ssid_pw));
-    ESP_LOGI(TAG, "ssid pw FROM nvs is %s", nvs_ssid_pw);
+    ESP_LOGD(TAG, "ssid pw FROM nvs is %s", nvs_ssid_pw);
 
-    ssid_cfg_t ssid_cfg = get_ssid_cfg(nvs_ssid, sizeof(nvs_ssid), nvs_ssid_pw, sizeof(nvs_ssid_pw));
+    ssid_cfg_t ssid_cfg = convert_to_ssid_cfg(nvs_ssid, sizeof(nvs_ssid), nvs_ssid_pw, sizeof(nvs_ssid_pw));
     return ssid_cfg;
 }
 
@@ -166,7 +167,7 @@ void wifi_nvs_set_ap_channel(const uint8_t channel)
     }
     else
     {
-        ESP_LOGI(TAG, "Channel not saved");
+        ESP_LOGD(TAG, "Channel not saved");
     }
 }
 uint8_t wifi_nvs_get_ap_channel()
@@ -179,11 +180,24 @@ uint8_t wifi_nvs_get_ap_channel()
 static esp_netif_ip_info_t convert_to_ip_info(const char *ip_address, const char *netmask, const char *gw)
 {
     esp_netif_ip_info_t ip = {.ip.addr = ipaddr_addr(ip_address), .netmask.addr = ipaddr_addr(netmask), .gw.addr = ipaddr_addr(gw)};
-    ESP_LOGI(TAG, "Have " IPSTR " from %s", IP2STR(&ip.ip), ip_address);
+    if (wifi_is_valid_ip_info(ip))
+    {
+        ESP_LOGD(TAG, "Converting to " IPSTR " from %s", IP2STR(&ip.ip), ip_address);
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Error in IP,netmask,gw: %s %s %s", ip_address, netmask, gw);
+    }
+
     return ip;
 }
 
-static dns_servers_info_t convert_to_dns_servers(const char *primary_dns, const char *second_dns)
+esp_netif_ip_info_t convert_to_ip(const char *ip_address)
+{
+    return convert_to_ip_info(ip_address, CONFIG_STATIC_NETMASK_ADDR, ip_address);
+}
+
+dns_servers_info_t convert_to_dns_servers(const char *primary_dns, const char *second_dns)
 {
     dns_servers_info_t dns_servers_info = {.primary_dns.addr = ipaddr_addr(primary_dns), .secondery_dns.addr = ipaddr_addr(second_dns)};
     return dns_servers_info;
@@ -201,7 +215,7 @@ dns_servers_info_t wifi_nvs_set_dns_servers(const char *primary_dns, const char 
         }
         else
         {
-            ESP_LOGI(TAG, "Primary DNS not changed");
+            ESP_LOGD(TAG, "Primary DNS not changed");
         }
     }
     else
@@ -216,7 +230,7 @@ dns_servers_info_t wifi_nvs_set_dns_servers(const char *primary_dns, const char 
         }
         else
         {
-            ESP_LOGI(TAG, "Secondery DNS not changed");
+            ESP_LOGD(TAG, "Secondery DNS not changed");
         }
     }
     else
@@ -259,12 +273,12 @@ void wifi_nvs_set_static_ip_info(const char *ip_address, const char *netmask, co
         }
         else
         {
-            ESP_LOGI(TAG, "Same static IP");
+            ESP_LOGD(TAG, "Same static IP");
         }
     }
     else
     {
-        ESP_LOGE(TAG, "cannot save static ip config - invalid values %s %s %s", ip_address, netmask, gw);
+        ESP_LOGE(TAG, "cannot save static ip config - invalid values");
     }
 }
 void wifi_nvs_set_static_ip(const char *ip_address)

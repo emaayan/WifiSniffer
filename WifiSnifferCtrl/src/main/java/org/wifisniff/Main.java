@@ -1,6 +1,12 @@
 package org.wifisniff;
 
 
+import org.locationtech.jts.geom.*;
+import org.locationtech.jts.index.kdtree.KdTree;
+import org.locationtech.jts.index.strtree.GeometryItemDistance;
+import org.locationtech.jts.index.strtree.ItemBoundable;
+import org.locationtech.jts.index.strtree.ItemDistance;
+import org.locationtech.jts.index.strtree.STRtree;
 import org.wifisniff.capture.AbstractPacket;
 import org.wifisniff.capture.CaptureHeader;
 import org.wifisniff.capture.PayloadHeader;
@@ -25,7 +31,9 @@ import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.SQLOutput;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.BiConsumer;
@@ -161,7 +169,87 @@ public class Main {
         }
     }
 
+    public static class Point{
+        public int x;
+        public int y;
+
+        public Point(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+
+        @Override
+        public String toString() {
+            return "Point{" +
+                    "x=" + x +
+                    ", y=" + y +
+                    '}';
+        }
+    }
+//    public static Point findClosestGridPoint(Point[] grid, double x, double y) {
+//        Point closestPoint = null;
+//        double minDistance = Double.MAX_VALUE;
+//
+//        for (Point point : grid) {
+//            double distance = Math.sqrt(Math.pow(point.x - x, 2) + Math.pow(point.y - y, 2));
+//            if (distance < minDistance) {
+//                minDistance = distance;
+//                closestPoint = point;
+//            }
+//        }
+//
+//        return closestPoint;
+//    }
     public static void main(String[] args) {
+//         Point grid[]={new Point(0,0),new Point(0,2),new Point(0,4)
+//                      ,new Point(2,0),new Point(2,2),new Point(2,4)
+//                      ,new Point(4,0),new Point(4,2),new Point(4,4)
+//         };
+//        System.out.println(findClosestGridPoint(grid,2.4,0.4));
+//        System.out.println(findClosestGridPoint(grid,3.6,0.4));
+
+        List<Coordinate> gridPoints = new ArrayList<>();
+        gridPoints.add(new Coordinate(0, 0));
+        gridPoints.add(new Coordinate(0, 2));
+        gridPoints.add(new Coordinate(0, 4));
+        gridPoints.add(new Coordinate(2, 0));
+        gridPoints.add(new Coordinate(2, 2));
+        gridPoints.add(new Coordinate(2, 4));
+        gridPoints.add(new Coordinate(4, 0));
+        gridPoints.add(new Coordinate(4, 2));
+        gridPoints.add(new Coordinate(4, 4));
+
+        final Envelope env = new Envelope(gridPoints.get(0),gridPoints.get(gridPoints.size()-1));
+
+        final STRtree stRtree=new STRtree();
+        gridPoints.forEach(gridPoint -> {
+            final Envelope itemEnv = new Envelope(gridPoint);
+            stRtree.insert(itemEnv,gridPoint);
+        });
+
+        final Coordinate target = new Coordinate(3.4, 2.4);
+
+        final Object o = stRtree.nearestNeighbour(env, target, (item1, item2) -> {
+            final Envelope c1 = (Envelope) item1.getBounds();
+            final Coordinate c2 = (Coordinate) item2.getItem();
+            return c1.centre().distance(c2);
+        });
+        System.out.println(o);
+
+
+//        int grid[][]={
+//                 {2,4,6,8,10}
+//                ,{4,6,8,10,12}
+//                ,{6,8,10,12,14}
+//        };
+//        for (int x = 0; x < grid.length; x++) {
+//            for (int y = 0; y <grid[x].length; y++) {
+//                System.out.println(grid[x][y]);
+//            }
+//        }
+    }
+
+    public static void main_2sds32(String[] args) {
 
         final int speed = 115200;
         final String port = "COM7";

@@ -4,9 +4,9 @@
     "C_Cpp.codeAnalysis.clangTidy.enabled": false,
     "idf.adapterTargetName": "esp32c3",
     "idf.openOcdConfigs": [
-        "board/esp32c3-builtin.cfg"
+        "board/esp32c3-bridge.cfg"
     ],
-    "idf.portWin": "COM12",
+    "idf.portWin": "COM6",
     "files.associations": {
         "sdkconfig.h": "c",
         "ssd1306.h": "c",

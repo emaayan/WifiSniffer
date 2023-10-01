@@ -12,6 +12,29 @@
 
 static const char *TAG = "nvs_lib";
 
+void nvs_bytes_to_hex(const uint8_t buf[], const size_t buf_sz, const char *delimiter, const size_t delimiter_sz, char *stringbuf, size_t sz)
+{
+
+    int i;
+    char *buf2 = stringbuf;
+    char *endofbuf = stringbuf + sz;
+    int spacing = 0;
+    spacing += 2; // hex char size
+    spacing += delimiter_sz;
+    spacing += 1; // null terminator
+    for (i = 0; i < buf_sz; i++)
+    {
+        if (buf2 + spacing < endofbuf)
+        {
+            if (i > 0)
+            {
+                buf2 += sprintf(buf2, delimiter);
+            }
+            buf2 += sprintf(buf2, "%02X", buf[i]);
+        }
+    }
+}
+
 esp_err_t nvs_erase_value(const char *namespace, const char *key)
 {
     nvs_handle_t nvs;
@@ -118,6 +141,8 @@ esp_err_t nvs_get_num32i(const char *namespace, const char *key, int32_t *out_va
     err = nvs_open(namespace, NVS_READWRITE, &nvs);
     if (err != ESP_OK)
     {
+        ESP_LOGE(TAG, "Namesapce %s not found", namespace);                
+        *out_value = def_value;
         return err;
     }
     int32_t value;
@@ -272,7 +297,8 @@ esp_err_t nvs_get_num(const char *namespace, const char *key, nvs_type_t type, v
 
     if (err != ESP_OK)
     {
-        return err;
+        ESP_LOGE(TAG, "Namesapce %s not found", namespace);                
+        err = ESP_OK;        
     }
 
     switch (type)
@@ -400,7 +426,85 @@ esp_err_t nvs_set_string(const char *namespace, const char *key, const char *str
         err = nvs_commit(nvs);
         if (err == ESP_OK)
         {
-            ESP_LOGI(TAG, "Value stored under key '%s'", key);
+            ESP_LOGI(TAG, "Value stored under key '%s' , value is  '%s'", key, str_value);
+        }
+    }
+
+    nvs_close(nvs);
+    return err;
+}
+
+esp_err_t nvs_set_array(const char *namespace, const char *key, const u_int8_t *value, size_t sz)
+{
+    esp_err_t err;
+
+    nvs_handle_t nvs;
+    err = nvs_open(namespace, NVS_READWRITE, &nvs);
+
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed openiong snamespace '%s' error %d ", namespace, err);
+        return err;
+    }
+
+    err = nvs_set_blob(nvs, key, value, sz);
+    if (err == ESP_OK)
+    {
+        err = nvs_commit(nvs);
+        if (err == ESP_OK)
+        {
+            ESP_LOG_BUFFER_HEXDUMP(TAG, value, sz, ESP_LOG_INFO);
+            ESP_LOGI(TAG, "Value stored under key '%s' ", key);
+        }
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Failed saving key '%s', %d error ", key, err);
+    }
+
+    nvs_close(nvs);
+    return err;
+}
+esp_err_t nvs_get_array(const char *namespace, const char *key, uint8_t *value, size_t *sz, uint8_t *def_value, size_t def_sz)
+{
+    esp_err_t err;
+
+    nvs_handle_t nvs;
+    err = nvs_open(namespace, NVS_READONLY, &nvs);
+    if (err != ESP_OK)
+    {
+        if (err == ESP_ERR_NVS_NOT_FOUND) // TODO: add this check in every opening
+        {
+            ESP_LOGE(TAG, "Namesapce %s not found", namespace);
+            *sz = def_sz;
+            memcpy(value, def_value, def_sz);
+            err = ESP_OK;
+        }
+        return err;
+    }
+
+    size_t len;
+    if ((err = nvs_get_blob(nvs, key, NULL, &len)) == ESP_OK)
+    {
+        if ((err = nvs_get_blob(nvs, key, value, &len)) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Error in Getting value");
+        }
+        else
+        {
+            *sz = len;
+            ESP_LOG_BUFFER_HEXDUMP(TAG, value, len, ESP_LOG_INFO);
+            ESP_LOGI(TAG, "key %s is found in namespace %s", key, namespace);
+        }
+    }
+    else
+    {
+        if (err == ESP_ERR_NVS_NOT_FOUND)
+        {
+            ESP_LOGW(TAG, "key %s is not found in namespace %s", key, namespace);
+            *sz = def_sz;
+            memcpy(value, def_value, def_sz);
+            err = ESP_OK;
         }
     }
 
@@ -417,14 +521,16 @@ esp_err_t nvs_get_string(const char *namespace, const char *key, char *out_value
 
     if (err != ESP_OK)
     {
-        return err;
+        ESP_LOGE(TAG, "Namesapce %s not found", namespace);
+        memcpy(out_value, def_value, def_value_sz);
+        err = ESP_OK;
     }
 
     size_t len;
     if ((err = nvs_get_str(nvs, key, NULL, &len)) == ESP_OK)
     {
         if ((err = nvs_get_str(nvs, key, out_value, &len)) != ESP_OK)
-        {            
+        {
             ESP_LOGE(TAG, "Error in Getting String value");
         }
         else
@@ -436,7 +542,7 @@ esp_err_t nvs_get_string(const char *namespace, const char *key, char *out_value
     {
         if (err == ESP_ERR_NVS_NOT_FOUND)
         {
-            ESP_LOGW(TAG, "key %s is not found in namespace %s using default %s ", key, namespace,def_value);
+            ESP_LOGW(TAG, "key %s is not found in namespace %s using default %s ", key, namespace, def_value);
             memcpy(out_value, def_value, def_value_sz);
             err = ESP_OK;
         }

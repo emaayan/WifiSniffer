@@ -47,6 +47,7 @@ typedef struct
 
 
 bool wifi_is_valid_ip(esp_ip4_addr_t esp_ip4_addr);
+bool wifi_is_valid_ip_info(esp_netif_ip_info_t esp_netif_ip_info);
 
 wifi_lib_mode_t wifi_nvs_set_mode(wifi_lib_mode_t wifi_lib_mode);
 wifi_lib_mode_t wifi_nvs_get_mode();
@@ -65,6 +66,7 @@ void wifi_nvs_get_sta_ssid_pw(char *value, size_t sz);
 
 ssid_cfg_t wifi_nvs_get_ssid_sta_cfg();
 ssid_cfg_t wifi_nvs_get_ssid_ap_cfg();
+ssid_cfg_t convert_to_ssid_cfg(char *nvs_ssid, size_t nvs_ssid_sz, char *nvs_ssid_pw, size_t nvs_ssid_pw_sz);
 
 void wifi_nvs_set_ap_channel(const uint8_t channel);
 uint8_t wifi_nvs_get_ap_channel();
@@ -75,5 +77,8 @@ dns_servers_info_t wifi_nvs_get_dns_servers();
 void wifi_nvs_set_static_ip_info(const char *ip_address, const char *netmask, const char *gw);
 void wifi_nvs_set_static_ip(const char *ip_address);
 esp_netif_ip_info_t wifi_nvs_get_static_ip_info();
+
+esp_netif_ip_info_t convert_to_ip(const char *ip_address);
+dns_servers_info_t convert_to_dns_servers(const char *primary_dns, const char *second_dns);
 
 #endif /* C570F7EA_080A_4C6C_861B_3A5E08C0FB26 */

@@ -1,8 +1,6 @@
-#include <stdio.h>
-
 #include "wifi_sniffer.h"
-#include "capture_lib.h"
 
+#include <stdio.h>
 #include "driver/gpio.h"
 
 #include "freertos/FreeRTOS.h"
@@ -19,7 +17,7 @@
 #include "esp_mac.h"
 
 #include <limits.h>
-
+#include "wifi_sniffer_nvs.h"
 #include "../../build/config/sdkconfig.h"
 
 static const char *TAG = "WifiSniffer";
@@ -29,9 +27,9 @@ static addrFilter_t addr_own_mac = {{}, 0};
 static addrFilter_t addr2_filter = {{}, 0};
 static addrFilter_t addr3_filter = {{}, 0};
 
-esp_event_loop_handle_t sniffer_event_loop_handle = NULL;
+static esp_event_loop_handle_t sniffer_event_loop_handle = NULL;
 ESP_EVENT_DEFINE_BASE(SNIFFER_EVENT);
-void sniffer_post_event(sniffer_event_types_t sniffer_event_types)
+static void sniffer_post_event(sniffer_event_types_t sniffer_event_types)
 {
     if (sniffer_event_loop_handle)
     {
@@ -49,19 +47,19 @@ void sniffer_post_event(sniffer_event_types_t sniffer_event_types)
 }
 
 #define SNIFFER_EVENT_QUEUE_SIZE 20
-void sniffer_start_event_loop()
+static void sniffer_start_event_loop()
 {
     static esp_event_loop_args_t sniffer_event_loop_task_config = {
         .queue_size = SNIFFER_EVENT_QUEUE_SIZE,
         .task_name = "sniffer_events_task",
         .task_priority = configMAX_PRIORITIES - 5,
-        .task_stack_size = configMINIMAL_STACK_SIZE * 3,
+        .task_stack_size = configMINIMAL_STACK_SIZE * 8,
         .task_core_id = tskNO_AFFINITY};
 
     ESP_ERROR_CHECK(esp_event_loop_create(&sniffer_event_loop_task_config, &sniffer_event_loop_handle));
 }
 
-void sniffer_event_handler(void *handler_args, esp_event_base_t base, int32_t id, void *event_data)
+static void sniffer_event_handler(void *handler_args, esp_event_base_t base, int32_t id, void *event_data)
 {
     sniffer_event_handler_t event_handler = handler_args;
     event_handler(id, event_data);
@@ -75,38 +73,55 @@ void sniffer_register_event_handler(sniffer_event_handler_t event_handler)
     }
 }
 
-void sniffer_set_filter(addrFilter_t addrFilter, addrFilter_t *filter)
+static bool sniffer_set_filter(const char *key, addrFilter_t addrFilter, addrFilter_t *filter)
 {
-    if (addrFilter.size >= 0)
+
+    if (xSemaphoreTake(_filter_sem, portMAX_DELAY))
     {
-        if (xSemaphoreTake(_filter_sem, portMAX_DELAY))
+        char mac_filter[20] = "";
+        ADDR_TO_STRING(addrFilter, mac_filter);
+
+        *filter = addrFilter;
+        ESP_LOGI(TAG, "Set filter %s, %s ", key, mac_filter);
+        wifi_sniffer_nvs_set_filter_mac(key, addrFilter);
+        if (!xSemaphoreGive(_filter_sem))
         {
-            *filter = addrFilter;
-            ESP_LOGD(TAG, "Set filter");
-            if (!xSemaphoreGive(_filter_sem))
-            {
-                ESP_LOGE(TAG, "Error releaseing addrOwnMac semaphore");
-            }
+            ESP_LOGE(TAG, "Error releaseing addrOwnMac semaphore");
         }
-        else
-        {
-            ESP_LOGE(TAG, "Failed to get addrOwnMac semaphore");
-        }
+        return true;
     }
+    else
+    {
+        ESP_LOGE(TAG, "Failed to get addrOwnMac semaphore");
+    }
+    return false;
 }
 
 void sniffer_set_own_mac_filter(addrFilter_t addrFilter)
 {
-    sniffer_set_filter(addrFilter, &addr_own_mac);
+    sniffer_set_filter("filter.own", addrFilter, &addr_own_mac);
 }
-
+#define ADDR2_KEY "filter.addr2"
 void sniffer_set_addr2_filter(addrFilter_t addrFilter)
 {
-    sniffer_set_filter(addrFilter, &addr2_filter);
+
+    if (sniffer_set_filter(ADDR2_KEY, addrFilter, &addr2_filter))
+    {
+        sniffer_post_event(SNIFFER_EVENT_FILTER_CHANGED);
+    }
 }
+addrFilter_t sniffer_get_addr2_filter()
+{
+    return addr2_filter;
+}
+#define ADDR3_KEY "filter.addr3"
 void sniffer_set_addr3_filter(addrFilter_t addrFilter)
 {
-    sniffer_set_filter(addrFilter, &addr3_filter);
+
+    if (sniffer_set_filter(ADDR3_KEY, addrFilter, &addr3_filter))
+    {
+        sniffer_post_event(SNIFFER_EVENT_FILTER_CHANGED);
+    }
 }
 
 bool isAddrEquel(const uint8_t addr[], const addrFilter_t filter)
@@ -122,6 +137,7 @@ bool filter_packet(wifi_mgmt_hdr_t *mgmt)
         bool f = !(
                      isAddrEquel(mgmt->sa, addr_own_mac) || isAddrEquel(mgmt->ra, addr_own_mac) || isAddrEquel(mgmt->ta, addr_own_mac)) &&
                  (isAddrEquel(mgmt->sa, addr3_filter) && isAddrEquel(mgmt->ta, addr2_filter));
+
         if (!xSemaphoreGive(_filter_sem))
         {
             ESP_LOGE(TAG, "Failed to give filter semaphore");
@@ -186,33 +202,51 @@ seq_ctrl_t get_seq(int16_t seqctl)
 
 int sniffer_to_string(wifi_promiscuous_pkt_t *pkt, char *buff, size_t sz)
 {
-    wifi_mgmt_hdr_t *mgmt = (wifi_mgmt_hdr_t *)pkt->payload;    
+    wifi_mgmt_hdr_t *mgmt = (wifi_mgmt_hdr_t *)pkt->payload;
     uint8_t *ta = mgmt->ta;
-    int16_t seq_ctrl=mgmt->seqctl;
+    int16_t seq_ctrl = mgmt->seqctl;
     seq_ctrl_t sq = get_seq(seq_ctrl);
     int16_t rssi = pkt->rx_ctrl.rssi;
-    uint8_t channel=pkt->rx_ctrl.channel;
-    int ret=snprintf(buff,sz,"ADDR2=" MACSTR ",seq=%d:%d , RSSI=%d ,Channel=%d ", MAC2STR(ta),sq.seq, sq.frag, rssi, channel);
+    uint8_t channel = pkt->rx_ctrl.channel;
+    int ret = snprintf(buff, sz, "ADDR2=" MACSTR ",seq=%d:%d , RSSI=%d ,Channel=%d ", MAC2STR(ta), sq.seq, sq.frag, rssi, channel);
     return ret;
     // ESP_LOGI(TAG, "ADDR2=" MACSTR " , RSSI=%d ,Channel=%d ,seq=%d:%d", MAC2STR(mgmt->ta), pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel, sq.seq, sq.frag);
+}
+#define SNIFFER_PAYLOAD_FCS_LEN 4
+#define SNIFFER_RSSI_FILTER_DEFAULT -96
+static rssi_t rssi_filter = SNIFFER_RSSI_FILTER_DEFAULT;
+void sniffer_set_rssi_filter(rssi_t rssi)
+{
+    if (rssi == 0)
+    {
+        rssi = SNIFFER_RSSI_FILTER_DEFAULT;
+    }
+    rssi_filter = rssi;
+    wifi_sniffer_nvs_set_filter_rssi(rssi);
+    sniffer_post_event(SNIFFER_EVENT_FILTER_CHANGED);
+}
+rssi_t sniffer_get_rssi_filter()
+{
+    return rssi_filter;
 }
 void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type)
 {
     wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *)buff;
-    if (type == WIFI_PKT_MGMT)
-    {
-        pkt->rx_ctrl.sig_len -= 4; // due to bug in esp-idf
-    }
 
-    wifi_mgmt_hdr_t *mgmt = (wifi_mgmt_hdr_t *)pkt->payload;
-    const bool filter = filter_packet(mgmt);
-    if (filter)
+    if (type != WIFI_PKT_MISC && !pkt->rx_ctrl.rx_state)
     {
-        // seq_ctrl_t sq = get_seq(mgmt->seqctl);
-        // ESP_LOGI(TAG, "ADDR2=" MACSTR " , RSSI=%d ,Channel=%d ,seq=%d:%d", MAC2STR(mgmt->ta), pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel, sq.seq, sq.frag);
+        pkt->rx_ctrl.sig_len -= SNIFFER_PAYLOAD_FCS_LEN;
 
-        pcap_rec_t pcap_rec = capture_create_pcap_record(pkt);
-        sniffer_add_queue(&pcap_rec);
+        wifi_mgmt_hdr_t *mgmt = (wifi_mgmt_hdr_t *)pkt->payload;
+        const bool filter = (rssi_filter == 0 || (rssi_filter < 0 && pkt->rx_ctrl.rssi >= rssi_filter)) && filter_packet(mgmt);
+        if (filter)
+        {
+            // seq_ctrl_t sq = get_seq(mgmt->seqctl);
+            // ESP_LOGI(TAG, "ADDR2=" MACSTR " , RSSI=%d ,Channel=%d ,seq=%d:%d", MAC2STR(mgmt->ta), pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel, sq.seq, sq.frag);
+
+            pcap_rec_t pcap_rec = capture_create_pcap_record(pkt);
+            sniffer_add_queue(&pcap_rec);
+        }
     }
 }
 
@@ -282,6 +316,20 @@ void wifi_sniffer_deinit()
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(false));
 }
 
+sniffer_packet_t sniffer_to_packet_data(pcap_rec_t msg)
+{
+    wifi_mgmt_hdr_t *mgmt = (wifi_mgmt_hdr_t *)msg.buf;
+
+    sniffer_packet_t sniffer_packet;
+    sniffer_packet.sq = get_seq(mgmt->seqctl);
+    snprintf(sniffer_packet.ta, sizeof(sniffer_packet.ta), MACSTR, MAC2STR(mgmt->ta));
+    snprintf(sniffer_packet.addr3, sizeof(sniffer_packet.addr3), MACSTR, MAC2STR(mgmt->sa));
+    sniffer_packet.fctl = mgmt->fctl;
+    sniffer_packet.rssi = msg.r_tapdata.signal;
+    sniffer_packet.channel = msg.r_tapdata.r_tapdata_channel.channel;
+    return sniffer_packet;
+    // ESP_LOGI(TAG, "GOT ADDR2=" MACSTR " , RSSI=%d ,Channel=%d ,seq=%d:%d", MAC2STR(mgmt->ta), msg.r_tapdata.signal, msg.r_tapdata.r_tapdata_channel.channel, sq.seq, sq.frag);
+}
 void sniffer_task(void *pvParameter)
 {
     sniffer_config_t *cfg = pvParameter;
@@ -338,14 +386,21 @@ void sniffer_init_config(addrFilter_t ownMac, sniffer_event_handler_t sniffer_ev
 
     sniffer_start_event_loop();
     sniffer_register_event_handler(sniffer_event_handler);
+
     sniffer_post_event(SNIFFER_EVENT_IS_UP);
+
+    rssi_t rssi = wifi_sniffer_nvs_get_filter_rssi();
+    sniffer_set_rssi_filter(rssi);
+
+    addrFilter_t addrFilter = wifi_sniffer_nvs_get_filter_mac(ADDR2_KEY);
+    sniffer_set_addr2_filter(addrFilter);
 }
 
 TaskHandle_t xHandle_sniff = NULL;
 void sniffer_start()
 {
     // wifi_sniffer_init();
-    xTaskCreate(&sniffer_task, "sniffig_task", configMINIMAL_STACK_SIZE * 8, &snifConfig, configMAX_PRIORITIES - 24, &xHandle_sniff);
+    xTaskCreate(&sniffer_task, "sniffig_task", configMINIMAL_STACK_SIZE * 10, &snifConfig, configMAX_PRIORITIES - 24, &xHandle_sniff);
 }
 
 void sniffer_stop()

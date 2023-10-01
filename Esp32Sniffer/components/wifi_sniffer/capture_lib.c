@@ -80,36 +80,17 @@ void capture_start()
     }
 }
 
-pcap_rec_hdr_t capture_create_header(uint32_t len)
-{
-    struct timeval tv_now;
-    gettimeofday(&tv_now, NULL);
-    pcap_rec_hdr_t pcap_rec_hdr = {.ts_sec = tv_now.tv_sec, .ts_usec = tv_now.tv_usec, .incl_len = len > pcap_hdr.snaplen ? pcap_hdr.snaplen : len, .orig_len = len};
-    return pcap_rec_hdr;
-}
-
-
-r_tapdata_t capture_radio_tap(wifi_pkt_rx_ctrl_t ctrl)
-{
-    r_tapdata_t r_tapdata = {.noise = ctrl.noise_floor, .signal = ctrl.rssi, .antenna = ctrl.ant, .r_tapdata_channel = {.channel = ctrl.channel}};
-    return r_tapdata;
-}
-
-pcap_rec_t capture_create_packet(uint32_t len, uint8_t *buf)
-{    
-    pcap_rec_hdr_t pcap_rec_hdr = capture_create_header(len+ieee80211_radiotap_header.it_len);
-    pcap_rec_t pcap_rec = {.pcap_rec_hdr = pcap_rec_hdr, .ieee80211_radiotap_header = ieee80211_radiotap_header, .buf = {}};    
-    memcpy(pcap_rec.buf, buf, pcap_rec_hdr.incl_len);
-    return pcap_rec;
-}
-
 pcap_rec_t capture_create_pcap_record(wifi_promiscuous_pkt_t *pkt)
 {
-    uint32_t sig_packetLength = pkt->rx_ctrl.sig_len;
+    wifi_pkt_rx_ctrl_t ctrl = pkt->rx_ctrl;    
     uint8_t *payload = pkt->payload;
-    pcap_rec_t pcap_rec = capture_create_packet(sig_packetLength, payload);
 
-    wifi_pkt_rx_ctrl_t ctrl = pkt->rx_ctrl;
+    uint32_t sig_packetLength = ctrl.sig_len;
+    uint32_t pack_len = sig_packetLength + ieee80211_radiotap_header.it_len;
+    pcap_rec_hdr_t pcap_rec_hdr = {.ts_sec =ctrl.timestamp / 1000000U, .ts_usec = ctrl.timestamp % 1000000U, .incl_len = pack_len > pcap_hdr.snaplen ? pcap_hdr.snaplen : pack_len, .orig_len = pack_len};
+    pcap_rec_t pcap_rec = {.pcap_rec_hdr = pcap_rec_hdr, .ieee80211_radiotap_header = ieee80211_radiotap_header, .buf = {}};
+    memcpy(pcap_rec.buf, payload, pcap_rec_hdr.incl_len);
+
     pcap_rec.r_tapdata.noise = ctrl.noise_floor;
     pcap_rec.r_tapdata.signal = ctrl.rssi;
     pcap_rec.r_tapdata.antenna = ctrl.ant;

@@ -25,7 +25,7 @@ menu "Sniffer Configuration"
 	
 	config SNIFFING_TIME
 		depends on WIFI_NONE
-		int "Time of sniffig in seconds"
+		int "Time of sniffing in seconds"
 		default 60
 		help
 			Time must be in seconds

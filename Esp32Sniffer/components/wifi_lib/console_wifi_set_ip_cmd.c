@@ -3,7 +3,6 @@
 #include "console_utils.h"
 #include "wifi_lib.h"
 
-
 static struct
 {
     struct arg_str *ip;
@@ -16,7 +15,6 @@ static void console_wifi_reset_set_ip_args()
     console_reset_argstr(console_wifi_set_ip_args.ip);
 }
 
-
 static void console_wifi_create_ip_arg(struct arg_str **argstr)
 {
     *argstr = arg_str1("i", "ip", "<ip>", "static ip");
@@ -25,9 +23,22 @@ static void console_wifi_set_ip_ip_arg(struct arg_str *arg_ip)
 {
     if (arg_ip->count > 0)
     {
-        const char *value = arg_ip->sval[0];
-        //  size_t len = strlen(value);
-        wifi_nvs_set_static_ip(value);
+        if(wifi_nvs_get_mode()!=WIFI_LIB_MODE_AP)
+        {
+            printfln("can only set static ip in ap mode");
+            return ;
+        }
+        const char *value = arg_ip->sval[0];        
+        esp_netif_ip_info_t ip = convert_to_ip(value);
+        
+        if (wifi_is_valid_ip(ip.ip))
+        {            
+            wifi_conf_set_static_ip(ip);                       
+        }
+        else
+        {
+            printfln("Invalid IP setting %s",value);
+        }
     }
 }
 

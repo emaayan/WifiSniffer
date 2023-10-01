@@ -1,7 +1,9 @@
 ## IDF Component Manager Manifest File
 version: 1.0.0
-dependencies:  
-  espressif/ssd1306: "^1.0.5"
+dependencies:
+  LovyanGFX:  
+    version: develop
+    git: https://github.com/lovyan03/LovyanGFX.git  
   ## Required IDF version
   idf:
     version: ">=4.1.0"

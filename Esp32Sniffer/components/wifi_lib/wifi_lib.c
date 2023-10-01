@@ -4,6 +4,56 @@
 #include <stdint.h>
 
 static const char *TAG = "WifiLib";
+
+static esp_event_loop_handle_t wifi_lib_event_loop_handle = NULL;
+ESP_EVENT_DEFINE_BASE(WIFI_LIB_EVENT);
+static void wifi_lib_post_event(wifi_lib_event_types_t wifi_lib_event_types)
+{
+    if (wifi_lib_event_loop_handle)
+    {
+        esp_err_t err = esp_event_post_to(wifi_lib_event_loop_handle, WIFI_LIB_EVENT, wifi_lib_event_types, NULL, 0, pdMS_TO_TICKS(10));
+        switch (err)
+        {
+        case ESP_ERR_TIMEOUT:
+            ESP_LOGE(TAG, "timeout on event loop");
+            break;
+        default:
+            ESP_ERROR_CHECK(err);
+            break;
+        }
+    }
+}
+
+#define WIFI_LIB_EVENT_QUEUE_SIZE 20
+static void wifi_lib_start_event_loop()
+{
+    static esp_event_loop_args_t wifi_lib_event_loop_task_config = {
+        .queue_size = WIFI_LIB_EVENT_QUEUE_SIZE,
+        .task_name = "wifi_lib_events_task",
+        .task_priority = configMAX_PRIORITIES - 5,
+        .task_stack_size = configMINIMAL_STACK_SIZE * 5,
+        .task_core_id = tskNO_AFFINITY};
+
+    ESP_ERROR_CHECK(esp_event_loop_create(&wifi_lib_event_loop_task_config, &wifi_lib_event_loop_handle));
+}
+
+static void wifi_lib_event_handler(void *handler_args, esp_event_base_t base, int32_t id, void *event_data)
+{
+    wifi_lib_event_handler_t event_handler = handler_args;
+    event_handler(id, event_data);
+}
+
+void wifi_lib_register_event_handler(wifi_lib_event_handler_t event_handler)
+{
+    if (wifi_lib_event_loop_handle)
+    {
+        ESP_ERROR_CHECK(esp_event_handler_instance_register_with(wifi_lib_event_loop_handle, WIFI_LIB_EVENT, ESP_EVENT_ANY_ID, wifi_lib_event_handler, event_handler, NULL));
+    }
+    else
+    {
+    }
+}
+
 static EventGroupHandle_t s_wifi_event_group;
 
 static esp_netif_t *_esp_netif = NULL;
@@ -15,13 +65,14 @@ static esp_netif_t *get_net_if()
 {
     return _esp_netif;
 }
+
 static void destroy_net_if()
 {
     esp_netif_t *esp_netif = get_net_if();
     if (esp_netif)
     {
         ESP_LOGI(TAG, "Destorying netif");
-        esp_netif_destroy(esp_netif);
+        esp_netif_destroy_default_wifi(esp_netif);
         set_net_if(NULL);
     }
 }
@@ -45,32 +96,48 @@ static void wifi_conf_static_ip(esp_netif_ip_info_t ip, dns_servers_info_t dns_s
         wifi_lib_mode_t wifi_lib_mode = wifi_nvs_get_mode();
         if (wifi_lib_mode == WIFI_LIB_MODE_AP)
         {
-            ESP_ERROR_CHECK(esp_netif_dhcpc_stop(netif));
+            if (wifi_is_valid_ip_info(ip))
+            {
+                esp_err_t err = esp_netif_dhcpc_stop(netif);
+                if (err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED)
+                {
+                    ESP_ERROR_CHECK(err);
+                }
 
-            ESP_ERROR_CHECK(esp_netif_dhcps_stop(netif));
-            ESP_ERROR_CHECK(esp_netif_set_ip_info(netif, &ip));
-            ESP_ERROR_CHECK(esp_netif_dhcps_start(netif));
+                ESP_ERROR_CHECK(esp_netif_dhcps_stop(netif));
+                ESP_ERROR_CHECK(esp_netif_set_ip_info(netif, &ip));
+                ESP_ERROR_CHECK(esp_netif_dhcps_start(netif));
 
-            char ip_addr[ADDRESS_SZ] = "";
-            snprintf(ip_addr, sizeof(ip_addr), IPSTR, IP2STR((&ip.ip)));
+                char ip_addr[ADDRESS_SZ] = "";
+                snprintf(ip_addr, sizeof(ip_addr), IPSTR, IP2STR((&ip.ip)));
 
-            char netmask_addr[ADDRESS_SZ] = "";
-            snprintf(netmask_addr, sizeof(netmask_addr), IPSTR, IP2STR((&ip.netmask)));
+                char netmask_addr[ADDRESS_SZ] = "";
+                snprintf(netmask_addr, sizeof(netmask_addr), IPSTR, IP2STR((&ip.netmask)));
 
-            char gw_addr[ADDRESS_SZ] = "";
-            snprintf(gw_addr, sizeof(gw_addr), IPSTR, IP2STR((&ip.gw)));
-            wifi_nvs_set_static_ip_info(ip_addr, netmask_addr, gw_addr);
-
-            ESP_LOGI(TAG, "Success to set static ip: %s, netmask: %s , gw: %s", ip_addr, netmask_addr, gw_addr); // check this still works
-
-            wifi_set_dns_server(netif, dns_servers_info.primary_dns, ESP_NETIF_DNS_MAIN);
-            wifi_set_dns_server(netif, dns_servers_info.secondery_dns, ESP_NETIF_DNS_BACKUP);
+                char gw_addr[ADDRESS_SZ] = "";
+                snprintf(gw_addr, sizeof(gw_addr), IPSTR, IP2STR((&ip.gw)));
+                wifi_nvs_set_static_ip_info(ip_addr, netmask_addr, gw_addr);
+                wifi_lib_post_event(WIFI_LIB_GOT_IP);
+                ESP_LOGI(TAG, "Success to set static ip: %s, netmask: %s , gw: %s", ip_addr, netmask_addr, gw_addr); // check this still works
+                wifi_set_dns_server(netif, dns_servers_info.primary_dns, ESP_NETIF_DNS_MAIN);
+                wifi_set_dns_server(netif, dns_servers_info.secondery_dns, ESP_NETIF_DNS_BACKUP);
+            }
+            else
+            {
+                ESP_LOGE(TAG, "Cannot configure Static IP");
+            }
         }
         else
         {
             ESP_LOGI(TAG, "Static IP can only be configured in AP mode");
         }
     }
+}
+
+void wifi_conf_set_static_ip(esp_netif_ip_info_t ip)
+{
+    dns_servers_info_t dns = {.primary_dns.addr = IPADDR_NONE, .secondery_dns.addr = IPADDR_NONE};
+    wifi_conf_static_ip(ip, dns);
 }
 
 static int s_retry_num = 0;
@@ -84,6 +151,7 @@ static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t eve
     {
         s_retry_num = 0;
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
+        wifi_lib_post_event(WIFI_LIB_GOT_IP);
         ESP_LOGI(TAG, "IP:" IPSTR, IP2STR(&event->ip_info.ip));
         break;
     }
@@ -91,6 +159,11 @@ static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t eve
     {
         ip_event_ap_staipassigned_t *event = (ip_event_ap_staipassigned_t *)event_data;
         ESP_LOGI(TAG, "IP assigned :" IPSTR, IP2STR(&event->ip));
+        break;
+    }
+    case IP_EVENT_STA_LOST_IP:
+    {
+        ESP_LOGW(TAG, "station lost IP and the IP is reset to 0");
         break;
     }
     default:
@@ -113,7 +186,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
     {
     case WIFI_EVENT_STA_START:
     {
-        ESP_LOGI(TAG, "STA Statred");
+        ESP_LOGI(TAG, "STA Started");
         xEventGroupSetBits(s_wifi_event_group, WIFI_EVENT_STA_START_BIT);
         break;
     }
@@ -127,6 +200,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
     {
         ESP_LOGI(TAG, "Started soft AP");
         xEventGroupSetBits(s_wifi_event_group, WIFI_EVENT_AP_START_BIT);
+        wifi_lib_post_event(WIFI_LIB_HAS_SSID);
         break;
     }
     case WIFI_EVENT_AP_STOP:
@@ -144,23 +218,31 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
     case WIFI_EVENT_AP_STADISCONNECTED:
     {
         wifi_event_ap_stadisconnected_t *event = (wifi_event_ap_stadisconnected_t *)event_data;
+        wifi_lib_post_event(WIFI_LIB_LEFT_SSID);
         ESP_LOGI(TAG, "station " MACSTR " leave, AID=%d", MAC2STR(event->mac), event->aid);
         break;
     }
     case WIFI_EVENT_STA_CONNECTED:
     {
-        ESP_LOGI(TAG, "connect STA");
+        wifi_event_sta_connected_t *wifi_event_sta_connected = (wifi_event_sta_connected_t *)event_data;
+        ESP_LOGI(TAG, "Connected STA to %s on channel %d", wifi_event_sta_connected->ssid, wifi_event_sta_connected->channel);
         xEventGroupSetBits(s_wifi_event_group, WIFI_EVENT_STA_CONNECTED_BIT);
-
+        wifi_lib_post_event(WIFI_LIB_JOINED_SSID);
         break;
     }
     case WIFI_EVENT_STA_DISCONNECTED:
     {
-        ESP_LOGI(TAG, "disconnected STA");
+        wifi_event_sta_disconnected_t *wifi_event_sta_disconnected = (wifi_event_sta_disconnected_t *)event_data;
+        ESP_LOGI(TAG, "Disconnected From %s with rssi %d ,due to: %d", wifi_event_sta_disconnected->ssid, wifi_event_sta_disconnected->rssi, wifi_event_sta_disconnected->reason);
         // esp_wifi_connect();
         // s_retry_num++;
         xEventGroupSetBits(s_wifi_event_group, WIFI_EVENT_STA_DISCONNECTED_BIT);
-
+        wifi_lib_post_event(WIFI_LIB_LEFT_SSID);
+        break;
+    }
+    case WIFI_EVENT_STA_BEACON_TIMEOUT:
+    {
+        ESP_LOGW(TAG, "STA Beacon timeout");
         break;
     }
     default:
@@ -183,10 +265,15 @@ static int wifi_generate_ssid(uint8_t *ssid_prefix, char *gen_ssid, size_t gen_s
     ESP_LOGI(TAG, "SSID will be %s:  ", gen_ssid);
     return sz;
 }
+static void wifi_set_conf(wifi_mode_t wifi_mode, wifi_interface_t interface, wifi_config_t conf)
+{
+    ESP_ERROR_CHECK(esp_wifi_set_mode(wifi_mode));
+    ESP_ERROR_CHECK(esp_wifi_set_config(interface, &conf));
+}
+
 static esp_netif_t *wifi_soft_ap(ssid_cfg_t ssid_cfg, uint8_t channel)
 {
-    esp_netif_t *netif = esp_netif_create_default_wifi_ap();
-    ESP_LOGI(TAG, "Created ap netif");
+
     wifi_config_t wifi_cfg = {.ap = {
                                   .channel = channel,
                                   .max_connection = CONFIG_MAX_STA_CONN,
@@ -201,9 +288,10 @@ static esp_netif_t *wifi_soft_ap(ssid_cfg_t ssid_cfg, uint8_t channel)
     memcpy(wifi_cfg.ap.ssid, gen_ssid, sz);
     wifi_cfg.ap.ssid_len = sz;
     memcpy(wifi_cfg.ap.password, ssid_cfg.password, ssid_cfg.pass_sz);
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+    wifi_set_conf(WIFI_MODE_AP, WIFI_IF_AP, wifi_cfg);
 
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_cfg));
+    ESP_LOGI(TAG, "Creating ap netif");
+    esp_netif_t *netif = esp_netif_create_default_wifi_ap();
     return netif;
 }
 
@@ -215,17 +303,22 @@ static esp_netif_t *wifi_set_sta(ssid_cfg_t ssid_cfg)
     };
     memcpy(staConf.ssid, ssid_cfg.ssid, ssid_cfg.ssid_sz);
     memcpy(staConf.password, ssid_cfg.password, ssid_cfg.pass_sz);
-    esp_netif_t *netif = esp_netif_create_default_wifi_sta();
     wifi_config_t cfg = {.sta = staConf};
-    ESP_LOGI(TAG, "Attempting to join %s:  ", staConf.bssid);
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &cfg));
+
+    wifi_set_conf(WIFI_MODE_STA, WIFI_IF_STA, cfg);
+
+    ESP_LOGD(TAG, "Attempting to join %s:  ", staConf.ssid);
+    esp_netif_t *netif = esp_netif_create_default_wifi_sta();
     return netif;
 }
 
-void wifi_init()
+void wifi_init(wifi_lib_event_handler_t wifi_lib_event_handler)
 {
     ESP_LOGI(TAG, "Init Wifi");
+
+    wifi_lib_start_event_loop();
+    wifi_lib_register_event_handler(wifi_lib_event_handler);
+
     ESP_ERROR_CHECK(esp_netif_init());
 
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -262,33 +355,96 @@ void wifi_get_ip(char msg[], size_t sz)
     }
 }
 
-// static bool ap_mode_started = false;
+static wifi_lib_cfg_t wifi_lib_get_config(esp_netif_t *esp_netif)
+{
+    wifi_lib_cfg_t wifi_lib_cfg;
+    if (esp_netif)
+    {
+        wifi_mode_t wifi_mode;
+        ESP_ERROR_CHECK(esp_wifi_get_mode(&wifi_mode));
+        wifi_config_t wifi_config;
+        switch (wifi_mode)
+        {
+        case WIFI_MODE_AP:
+        {
+            ESP_ERROR_CHECK(esp_wifi_get_config(WIFI_IF_AP, &wifi_config));
+            wifi_lib_cfg.wifi_lib_mode = WIFI_LIB_MODE_AP;
+            memcpy(wifi_lib_cfg.ssid_name, wifi_config.ap.ssid, sizeof(wifi_lib_cfg.ssid_name));
+        }
+        break;
+        case WIFI_MODE_STA:
+        {
+            ESP_ERROR_CHECK(esp_wifi_get_config(WIFI_IF_STA, &wifi_config));
+            wifi_lib_cfg.wifi_lib_mode = WIFI_LIB_MODE_STA;
+            wifi_ap_record_t wifi_ap_record;
+            esp_err_t err = esp_wifi_sta_get_ap_info(&wifi_ap_record);
+            if (err != ESP_OK)
+            {
+                memset(wifi_lib_cfg.ssid_name, ' ', sizeof(wifi_lib_cfg.ssid_name));
+            }
+            else
+            {
+                memcpy(wifi_lib_cfg.ssid_name, wifi_ap_record.ssid, sizeof(wifi_lib_cfg.ssid_name));
+            }
+        }
+        break;
+        default:
+            ESP_LOGE(TAG, "Unexepcted Mode");
+            break;
+        }
+        uint8_t channel = 0;
+        wifi_second_chan_t wifi_second_chan = 0;
+        esp_err_t err = esp_wifi_get_channel(&channel, &wifi_second_chan);
+        if (err != ESP_ERR_WIFI_STOP_STATE)
+        {
+            ESP_ERROR_CHECK(err);
+        }
+        wifi_lib_cfg.channel = channel;
+
+        esp_netif_ip_info_t ip_info;
+        ESP_ERROR_CHECK(esp_netif_get_ip_info(esp_netif, &ip_info));
+        wifi_lib_cfg.ip = ip_info.ip;
+
+        ESP_ERROR_CHECK(esp_netif_get_mac(esp_netif, wifi_lib_cfg.mac));
+    }
+    else
+    {
+        ESP_LOGE(TAG, "net if is not up");
+        wifi_lib_cfg.wifi_lib_mode = WIFI_LIB_MODE_NONE;
+    }
+    return wifi_lib_cfg;
+}
+wifi_lib_cfg_t wifi_lib_get_curr_config()
+{
+    esp_netif_t *net_if = get_net_if();
+    return wifi_lib_get_config(net_if);
+}
+
 void wifi_ap(const ssid_cfg_t ssid_cfg, uint8_t channel, esp_netif_ip_info_t ip, dns_servers_info_t dns_servers_info)
 {
     ESP_LOGI(TAG, "Setting SoftAP");
     ESP_ERROR_CHECK(esp_wifi_stop());
     destroy_net_if();
-    ESP_LOGI(TAG, "Waiting for SoftAP to be stopped");
-    EventBits_t bits = 0;
-    {
-        esp_netif_t *esp_netif = wifi_soft_ap(ssid_cfg, channel);
-        ESP_ERROR_CHECK(esp_wifi_start());
-        wifi_nvs_set_mode(WIFI_LIB_MODE_AP);
-        set_net_if(esp_netif);
 
-        ESP_LOGI(TAG, "Waiting for AP Mode");
-        bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_EVENT_AP_START_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
-        if (bits & WIFI_EVENT_AP_START_BIT)
-        {
-            wifi_conf_static_ip(ip, dns_servers_info);
-            char msg[50] = "";
-            wifi_get_ip(msg, sizeof(msg));
-            ESP_LOGI(TAG, "IP: %s", msg);
-        }
-        else
-        {
-            ESP_LOGE(TAG, "UNEXPECTED EVENT %" PRIu32, bits);
-        }
+    esp_netif_t *esp_netif = wifi_soft_ap(ssid_cfg, channel);
+    set_net_if(esp_netif);
+    ESP_ERROR_CHECK(esp_wifi_start());
+    wifi_nvs_set_mode(WIFI_LIB_MODE_AP);
+
+    ESP_LOGI(TAG, "Waiting for AP Mode");
+    EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_EVENT_AP_START_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
+    if (bits & WIFI_EVENT_AP_START_BIT)
+    {
+        wifi_conf_static_ip(ip, dns_servers_info);
+        char msg[50] = "";
+        wifi_get_ip(msg, sizeof(msg));
+        ESP_LOGI(TAG, "IP: %s", msg);
+
+        // wifi_lib_cfg_t wifi_lib_cfg = wifi_lib_get_config(esp_netif);
+    }
+    else
+    {
+        ESP_LOGE(TAG, "UNEXPECTED EVENT %" PRIu32, bits);
     }
 }
 
@@ -298,14 +454,16 @@ void wifi_sta(const ssid_cfg_t ssid_cfg_sta)
     ESP_ERROR_CHECK(esp_wifi_stop());
     destroy_net_if();
     esp_netif_t *esp_netif = wifi_set_sta(ssid_cfg_sta);
-    ESP_ERROR_CHECK(esp_wifi_start());
     set_net_if(esp_netif);
+
+    ESP_ERROR_CHECK(esp_wifi_start());
 
     ESP_LOGI(TAG, "Waiting for ESP to join");
     EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_EVENT_STA_START_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
     if (bits & WIFI_EVENT_STA_START_BIT)
     {
         ESP_ERROR_CHECK(esp_netif_dhcps_stop(esp_netif)); // MUST NOT HAVE DHCP SERVER WHEN JOINING A NETWORK
+
         ESP_ERROR_CHECK(esp_wifi_connect());
         wifi_nvs_set_mode(WIFI_LIB_MODE_STA);
     }
@@ -327,8 +485,8 @@ void wifi_set_mode(wifi_lib_mode_t wifi_lib_mode)
         esp_netif_ip_info_t esp_netif_ip_info = wifi_nvs_get_static_ip_info();
         dns_servers_info_t dns_servers_info = wifi_nvs_get_dns_servers();
         wifi_ap(ssid_cfg, channel, esp_netif_ip_info, dns_servers_info);
+        break;
     }
-    break;
     case WIFI_LIB_MODE_STA:
     {
         ESP_LOGI(TAG, "Setting mode STA");

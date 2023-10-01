@@ -87,7 +87,7 @@ static void tcp_server_task(void *pvParameters)
     int reuse_addr = 1;
     setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &reuse_addr, sizeof(reuse_addr));
 
-    ESP_LOGI(TAG, "Socket created");
+    ESP_LOGD(TAG, "Socket created");
     struct sockaddr_storage dest_addr;
     struct sockaddr_in *dest_addr_ip4 = (struct sockaddr_in *)&dest_addr;
     dest_addr_ip4->sin_addr.s_addr = htonl(INADDR_ANY);

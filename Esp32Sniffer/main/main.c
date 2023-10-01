@@ -310,7 +310,7 @@ void setup()
 
     // addrFilter_t f = {{}, 0};
     // sniffer_set_addr2_filter(f);
-#ifdef LILIGO_S3
+#ifdef CONFIG_LILIGO_S3
     sniffer_start();
 #endif
 }

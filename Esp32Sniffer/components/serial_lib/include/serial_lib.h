@@ -21,7 +21,7 @@ typedef void (*serial_write_h)(sent_message_t *serial_message);
 typedef struct
 {
     const uart_port_t port;
-    const u_int16_t delay;
+    const uint16_t delay;
     const uint32_t taskSize;
     const serial_write_h msgProducerFromSource;
 
@@ -44,7 +44,7 @@ typedef void (*serial_reader_h)(serial_messsage_t serial_message);
 typedef struct rxConfigStruct
 {
     const uart_port_t port;
-    const u_int16_t wait;
+    const uint16_t wait;
     const uint32_t taskSize;
     const serial_reader_h serial_reader;
 

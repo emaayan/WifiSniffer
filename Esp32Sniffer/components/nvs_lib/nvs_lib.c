@@ -434,7 +434,7 @@ esp_err_t nvs_set_string(const char *namespace, const char *key, const char *str
     return err;
 }
 
-esp_err_t nvs_set_array(const char *namespace, const char *key, const u_int8_t *value, size_t sz)
+esp_err_t nvs_set_array(const char *namespace, const char *key, const uint8_t *value, size_t sz)
 {
     esp_err_t err;
 

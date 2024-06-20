@@ -30,10 +30,10 @@ typedef struct pcap_rec_header
 
 typedef struct
 {
-    u_int8_t it_version; /* set to 0 */
-    u_int8_t it_pad;
-    u_int16_t it_len;     /* entire length */
-    u_int32_t it_present; /* fields present */
+    uint8_t it_version; /* set to 0 */
+    uint8_t it_pad;
+    uint16_t it_len;     /* entire length */
+    uint32_t it_present; /* fields present */
 } __attribute__((__packed__)) ieee80211_radiotap_header_t;
 
 typedef struct // https://www.radiotap.org/fields/XChannel

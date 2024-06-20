@@ -53,7 +53,7 @@ static void tx_task(void *arg)
     // esp_log_level_set(TX_TASK_TAG, ESP_LOG_INFO);
     const txConfigStruct_t *txConfig = arg;
     const uart_port_t port = txConfig->port;
-    const u_int16_t delay = txConfig->delay;
+    const uint16_t delay = txConfig->delay;
     while (1)
     {
         sent_message_t msg; // TODO: turns this into byte array
@@ -79,7 +79,7 @@ static void rx_task(void *arg)
 {
     const rxConfigStruct_t *rxConfiguration = arg;
     const uart_port_t port = rxConfiguration->port;
-    const u_int16_t wait = rxConfiguration->wait;
+    const uint16_t wait = rxConfiguration->wait;
 
     while (1)
     {

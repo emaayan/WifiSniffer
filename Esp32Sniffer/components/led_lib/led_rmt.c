@@ -1,12 +1,13 @@
 #include "led_rmt.h"
-
+#include "esp_log.h"
 #include "driver/gpio.h"
 #include "led_strip.h"
-
+static const char *TAG = "LedStrip";
 static led_strip_handle_t led_strip;
 
 void led_init(int pin)
 {
+	ESP_LOGI(TAG, "Init led strip...%d ",pin);
     /* LED strip initialization with the GPIO and pixels number*/
     led_strip_config_t strip_config = {
         .strip_gpio_num = pin,
@@ -24,7 +25,7 @@ void led_init(int pin)
 #define R 16
 #define G 16
 #define B 16
-void led_set(uint8_t s_led_state)
+void led_set(bool s_led_state)
 {
     /* If the addressable LED is enabled */
     if (s_led_state)

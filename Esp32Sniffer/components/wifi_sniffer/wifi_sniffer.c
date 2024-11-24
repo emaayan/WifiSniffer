@@ -1,8 +1,10 @@
 #include "wifi_sniffer.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include "driver/gpio.h"
 
+#include "esp_wifi_types_generic.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -101,6 +103,7 @@ void sniffer_set_own_mac_filter(addrFilter_t addrFilter)
 {
     sniffer_set_filter("filter.own", addrFilter, &addr_own_mac);
 }
+
 #define ADDR2_KEY "filter.addr2"
 void sniffer_set_addr2_filter(addrFilter_t addrFilter)
 {
@@ -114,6 +117,7 @@ addrFilter_t sniffer_get_addr2_filter()
 {
     return addr2_filter;
 }
+
 #define ADDR3_KEY "filter.addr3"
 void sniffer_set_addr3_filter(addrFilter_t addrFilter)
 {
@@ -129,6 +133,8 @@ bool isAddrEquel(const uint8_t addr[], const addrFilter_t filter)
     bool f = filter.size == 0 || !memcmp(addr, filter.addr, filter.size);
     return f;
 }
+
+
 
 bool filter_packet(wifi_mgmt_hdr_t *mgmt)
 {
@@ -166,6 +172,7 @@ static bool sniffer_create_queue(UBaseType_t txQSize)
     }
     else
     {
+		ESP_LOGI(TAG, "Created Queue");
         _packet_queue = queue;
         return true;
     }
@@ -212,9 +219,11 @@ int sniffer_to_string(wifi_promiscuous_pkt_t *pkt, char *buff, size_t sz)
     return ret;
     // ESP_LOGI(TAG, "ADDR2=" MACSTR " , RSSI=%d ,Channel=%d ,seq=%d:%d", MAC2STR(mgmt->ta), pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel, sq.seq, sq.frag);
 }
+
 #define SNIFFER_PAYLOAD_FCS_LEN 4
 #define SNIFFER_RSSI_FILTER_DEFAULT -96
 static rssi_t rssi_filter = SNIFFER_RSSI_FILTER_DEFAULT;
+
 void sniffer_set_rssi_filter(rssi_t rssi)
 {
     if (rssi == 0)
@@ -225,20 +234,142 @@ void sniffer_set_rssi_filter(rssi_t rssi)
     wifi_sniffer_nvs_set_filter_rssi(rssi);
     sniffer_post_event(SNIFFER_EVENT_FILTER_CHANGED);
 }
+
 rssi_t sniffer_get_rssi_filter()
 {
     return rssi_filter;
 }
+
 void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type)
 {
     wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *)buff;
 
     if (type != WIFI_PKT_MISC && !pkt->rx_ctrl.rx_state)
     {
+		const uint16_t fc= *(uint16_t*)pkt->payload;
+				
         pkt->rx_ctrl.sig_len -= SNIFFER_PAYLOAD_FCS_LEN;
-
-        wifi_mgmt_hdr_t *mgmt = (wifi_mgmt_hdr_t *)pkt->payload;
-        const bool filter = (rssi_filter == 0 || (rssi_filter < 0 && pkt->rx_ctrl.rssi >= rssi_filter)) && filter_packet(mgmt);
+        const bool rssiFilter= (rssi_filter == 0 || (rssi_filter < 0 && pkt->rx_ctrl.rssi >= rssi_filter));
+        bool isOwnAddress=false;
+        bool macFilter=false; //=filter_packet(mgmt);
+        if (xSemaphoreTake(_filter_sem, portMAX_DELAY))
+    	{
+        
+	        if (!xSemaphoreGive(_filter_sem))
+	        {
+	            ESP_LOGE(TAG, "Failed to give filter semaphore");
+	            macFilter= true;
+	        }
+	        else
+	        {
+				const uint8_t subtype = FC_SUBTYPE(fc);
+			    const bool to_ds = FC_TO_DS(fc);
+			    const bool from_ds = FC_FROM_DS(fc);
+			    	    
+		        
+				switch (type) 
+				{
+					case WIFI_PKT_MGMT:
+					{
+						wifi_managment_hdr_t *wifi_managment_hdr =(wifi_managment_hdr_t *)pkt->payload;
+					    isOwnAddress= 
+					      isAddrEquel(wifi_managment_hdr->sa, addr_own_mac)  || isAddrEquel(wifi_managment_hdr->da, addr_own_mac) 
+					   || isAddrEquel(wifi_managment_hdr->bssid, addr_own_mac) 
+					   ;			
+					  macFilter= isAddrEquel(wifi_managment_hdr->sa, addr2_filter)  || isAddrEquel(wifi_managment_hdr->da, addr2_filter)
+					   ; 			  	
+					}
+					break;
+					case WIFI_PKT_DATA:
+					{
+						if(!from_ds && !to_ds){					
+							wifi_data_ibss_hdr_t *wifi_data_ibss_hdr=(wifi_data_ibss_hdr_t *)pkt->payload;
+						    isOwnAddress=isAddrEquel(wifi_data_ibss_hdr->sa, addr_own_mac) || isAddrEquel(wifi_data_ibss_hdr->da, addr_own_mac);			   			   		
+				        	macFilter=isAddrEquel(wifi_data_ibss_hdr->sa, addr2_filter);// || isAddrEquel(wifi_data_ibss_hdr->da, addr2_filter);			    			  				
+						}else if(from_ds && !to_ds){
+							wifi_data_from_ap_hdr_t *wifi_data_from_ap_hdr=(wifi_data_from_ap_hdr_t *)pkt->payload;
+							isOwnAddress=isAddrEquel(wifi_data_from_ap_hdr->sa, addr_own_mac) || isAddrEquel(wifi_data_from_ap_hdr->da, addr_own_mac);			   			   		
+				        	macFilter=isAddrEquel(wifi_data_from_ap_hdr->sa, addr2_filter);// || isAddrEquel(wifi_data_from_ap_hdr->da, addr2_filter);
+						}else if(!from_ds && to_ds){
+							wifi_data_to_ap_hdr_t *wifi_data_to_ap_hdr=(wifi_data_to_ap_hdr_t *)pkt->payload;
+							isOwnAddress=isAddrEquel(wifi_data_to_ap_hdr->sa, addr_own_mac) || isAddrEquel(wifi_data_to_ap_hdr->da, addr_own_mac);			   			   		
+				        	macFilter=isAddrEquel(wifi_data_to_ap_hdr->sa, addr2_filter);// || isAddrEquel(wifi_data_to_ap_hdr->da, addr2_filter);
+						}else{
+							wifi_data_wds_hdr_t *wifi_data_wds_hdr=(wifi_data_wds_hdr_t *)pkt->payload;				
+							isOwnAddress=isAddrEquel(wifi_data_wds_hdr->ta, addr_own_mac) || isAddrEquel(wifi_data_wds_hdr->ra, addr_own_mac);			   			   		
+					        macFilter=isAddrEquel(wifi_data_wds_hdr->ta, addr2_filter);// || isAddrEquel(wifi_data_wds_hdr->da, addr2_filter);
+						}
+						
+					}
+					break;
+					case WIFI_PKT_CTRL:
+					{
+						switch (subtype) 
+						{
+							case WIFI_PKT_CTRL_SUBTYPE_BAR:
+							{
+								wifi_ctrl_ba_hdr_t *wifi_ctrl_ba_hdr=(wifi_ctrl_ba_hdr_t *)pkt->payload;
+								isOwnAddress=isAddrEquel(wifi_ctrl_ba_hdr->ta ,addr_own_mac) || isAddrEquel(wifi_ctrl_ba_hdr->ra, addr_own_mac);			   			   		
+								macFilter=isAddrEquel(wifi_ctrl_ba_hdr->ta, addr2_filter);// || isAddrEquel(wifi_ctrl_ba_hdr->ra, addr2_filter);
+							}
+							break;						
+							case WIFI_PKT_CTRL_SUBTYPE_BA:
+							{
+								wifi_ctrl_ba_hdr_t *wifi_ctrl_ba_hdr=(wifi_ctrl_ba_hdr_t *)pkt->payload;
+								isOwnAddress=isAddrEquel(wifi_ctrl_ba_hdr->ta ,addr_own_mac) || isAddrEquel(wifi_ctrl_ba_hdr->ra, addr_own_mac);			   			   		
+								macFilter=isAddrEquel(wifi_ctrl_ba_hdr->ta, addr2_filter);// || isAddrEquel(wifi_ctrl_ba_hdr->ta, addr2_filter);	
+							}
+							break;
+							case WIFI_PKT_CTRL_SUBTYPE_PS_POLL:
+							{
+								wifi_ctrl_ps_poll_hdr_t *wifi_ctrl_ps_poll_hdr=(wifi_ctrl_ps_poll_hdr_t *)pkt->payload;
+								isOwnAddress=isAddrEquel(wifi_ctrl_ps_poll_hdr->ta, addr_own_mac);			   			   		
+								macFilter=isAddrEquel(wifi_ctrl_ps_poll_hdr->ta, addr2_filter);
+							}
+							break;
+							case WIFI_PKT_CTRL_SUBTYPE_RTS:
+							{
+								wifi_ctrl_rts_hdr_t *wifi_ctrl_rts_hdr=(wifi_ctrl_rts_hdr_t *)pkt->payload;
+								isOwnAddress=isAddrEquel(wifi_ctrl_rts_hdr->ta ,addr_own_mac) || isAddrEquel(wifi_ctrl_rts_hdr->ra, addr_own_mac);			   			   		
+								macFilter=isAddrEquel(wifi_ctrl_rts_hdr->ta, addr2_filter); //|| isAddrEquel(wifi_ctrl_rts_hdr->ra, addr2_filter);
+							}
+							break;
+							case WIFI_PKT_CTRL_SUBTYPE_CTS:
+							{
+								wifi_ctrl_cts_hdr_t *wifi_ctrl_cts_hdr=(wifi_ctrl_cts_hdr_t *)pkt->payload;
+								isOwnAddress=isAddrEquel(wifi_ctrl_cts_hdr->ra ,addr_own_mac);			   			   		
+								macFilter=isAddrEquel(wifi_ctrl_cts_hdr->ra, addr2_filter);
+							}
+							break;
+							case WIFI_PKT_CTRL_SUBTYPE_ACK:
+							{
+								wifi_ctrl_ack_hdr_t *wifi_ctrl_ack_hdr=(wifi_ctrl_ack_hdr_t *)pkt->payload;
+								isOwnAddress=isAddrEquel(wifi_ctrl_ack_hdr->ra ,addr_own_mac);			   			   		
+								macFilter=isAddrEquel(wifi_ctrl_ack_hdr->ra, addr2_filter);
+							}
+							break;
+							default:
+								break;					
+						}
+		
+					}
+					break;			
+					default:
+						break;
+				}
+				
+			//	wifi_mgmt_hdr_t *mgmt = (wifi_mgmt_hdr_t *)pkt->payload;
+			        
+			}
+		}
+	    else
+	    {
+	        macFilter= true;
+	    }
+    
+ 		
+		        
+        const bool filter = rssiFilter && !isOwnAddress &&  macFilter; 
         if (filter)
         {
             // seq_ctrl_t sq = get_seq(mgmt->seqctl);
@@ -324,19 +455,20 @@ sniffer_packet_t sniffer_to_packet_data(pcap_rec_t msg)
     sniffer_packet.sq = get_seq(mgmt->seqctl);
     snprintf(sniffer_packet.ta, sizeof(sniffer_packet.ta), MACSTR, MAC2STR(mgmt->ta));
     snprintf(sniffer_packet.addr3, sizeof(sniffer_packet.addr3), MACSTR, MAC2STR(mgmt->sa));
-    sniffer_packet.fctl = mgmt->fctl;
+    sniffer_packet.fctl = mgmt->wifi_base_hdr.fctl;
     sniffer_packet.rssi = msg.r_tapdata.signal;
     sniffer_packet.channel = msg.r_tapdata.r_tapdata_channel.channel;
     return sniffer_packet;
     // ESP_LOGI(TAG, "GOT ADDR2=" MACSTR " , RSSI=%d ,Channel=%d ,seq=%d:%d", MAC2STR(mgmt->ta), msg.r_tapdata.signal, msg.r_tapdata.r_tapdata_channel.channel, sq.seq, sq.frag);
 }
+
 void sniffer_task(void *pvParameter)
 {
-    sniffer_config_t *cfg = pvParameter;
+    //sniffer_config_t *cfg = pvParameter;
     // const int sleep_time = cfg->channelSwitchInterval;
 
     ESP_LOGI(TAG, "[SNIFFER] Starting sniffing mode...");
-    wifi_sniffer_init(*cfg);
+    wifi_sniffer_init();
     capture_start();
     sniffer_post_event(SNIFFER_EVENT_CAPTURE_STARTED);
     while (true)
@@ -372,6 +504,10 @@ void sniffer_set_filter_data()
 void sniffer_set_no_filter()
 {
     wifi_promiscuous_filter_t wifi_promiscuous_filter = {.filter_mask = WIFI_PROMIS_FILTER_MASK_ALL};
+    
+    const wifi_promiscuous_filter_t wifi_promiscuous_ctrl_filter = {.filter_mask = WIFI_PROMIS_CTRL_FILTER_MASK_ALL};    
+    ESP_ERROR_CHECK(esp_wifi_set_promiscuous_ctrl_filter(&wifi_promiscuous_ctrl_filter));
+    
     sniffer_set_filter_packet_type(wifi_promiscuous_filter);
 }
 
@@ -399,8 +535,12 @@ void sniffer_init_config(addrFilter_t ownMac, sniffer_event_handler_t sniffer_ev
 TaskHandle_t xHandle_sniff = NULL;
 void sniffer_start()
 {
-    // wifi_sniffer_init();
-    xTaskCreate(&sniffer_task, "sniffig_task", configMINIMAL_STACK_SIZE * 10, &snifConfig, configMAX_PRIORITIES - 24, &xHandle_sniff);
+    // wifi_sniffer_init();    
+    ESP_LOGI(TAG,"Sniffer Started");
+    BaseType_t xRet=xTaskCreate(&sniffer_task, "sniffing_task", configMINIMAL_STACK_SIZE * 10, &snifConfig, configMAX_PRIORITIES - 24, &xHandle_sniff);
+    if (xRet==errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY){
+		ESP_LOGE(TAG,"Failed to create Task, Out of Memory");
+	}    
 }
 
 void sniffer_stop()

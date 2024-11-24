@@ -1,5 +1,8 @@
 #include <stdio.h>
 
+#include "esp_app_desc.h"
+
+
 #include "wifi_lib.h"
 #include "wifi_sniffer.h"
 #include "wifi_lib_nvs.h"
@@ -9,17 +12,23 @@
 #include "console_wifi_cmd.h"
 
 #include "tcp_server.h"
-#include "serial_lib.h"
+// #include "serial_lib.h"
 
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "led_common.h"
 
-#include "OledDisplayUtils.h"
-#include "lcd_lib.h"
-#include "display_lib.h"
+#ifdef CONFIG_USE_OLED
+	#include "OledDisplayUtils.h"
+#endif
+#ifdef CONFIG_USE_LCD
+	#include "lcd_lib.h"
+	#include "display_lib.h"
+#endif
 
-#include "iot_button.h"
+#ifdef CONFIG_LILIGO_S3
+	#include "iot_button.h"
+#endif
 
 #include "../build/config/sdkconfig.h"
 static const char *TAG = "WifiSnifferMain";
@@ -68,8 +77,12 @@ int on_capture(pcap_rec_t pcap_rec, size_t total_size)
             sniffer_stop();
         }
     }
-    sniffer_packet_t sniffer_packet = sniffer_to_packet_data(pcap_rec);
+    
+    #ifdef CONFIG_LCD_LIB
+    sniffer_packet_t sniffer_packet = sniffer_to_packet_data(pcap_rec);    
     rssi_t rssi = sniffer_packet.rssi;
+    
+
     uint32_t color = 0;
     if (rssi > -50)
     {
@@ -85,7 +98,7 @@ int on_capture(pcap_rec_t pcap_rec, size_t total_size)
     }
     display_lib_print_std(0, 85, color, "%s, %d, %04x", sniffer_packet.ta, rssi, sniffer_packet.sq.seq); // TODO ADD ANOTHER TASK TO WRITE TO DISPLAY
     display_lib_print_std(0, 105, color, "a3: %s, fr: %04x", sniffer_packet.addr3,sniffer_packet.fctl); 
-
+	#endif		
     return total_size;
 }
 
@@ -94,7 +107,7 @@ void config_wifi_init()
 {
     wifi_init(on_wifi_lib_event_handler);
 
-    wifi_lib_mode_t wifi_lib_mode = wifi_nvs_get_mode(WIFI_LIB_MODE_AP);
+    wifi_lib_mode_t wifi_lib_mode = wifi_nvs_get_mode();
     wifi_set_mode(wifi_lib_mode);
     // {
     //     char ssid[] = "MYAP";
@@ -158,7 +171,9 @@ static void sniffer_display_filter()
     char mac_filter[20] = "";
     ADDR_TO_STRING(addrFilter, mac_filter);
     ESP_LOGI(TAG, "filter ,mac: %s ,rssi: %d ", mac_filter, rssi);
-    display_lib_print_std(0, 62, LCD_CYAN, "filter ,mac: %s ,rssi: %d ", mac_filter, rssi);
+    #ifdef CONFIG_USE_LCD
+    	display_lib_print_std(0, 62, LCD_CYAN, "filter ,mac: %s ,rssi: %d ", mac_filter, rssi);
+    #endif
 }
 
 void sniffer_on_event_handler(int32_t event_id, void *event_data)
@@ -185,24 +200,26 @@ void sniffer_on_event_handler(int32_t event_id, void *event_data)
 }
 
 void console_init()
-{
-    // console_config_init();
-    // console_start();
+{    
     console_sniffer_register_cmd();
     console_wifi_register_cmd();
 
     console_begin();
 }
 
+#ifdef CONFIG_USE_LCD
 void display_init()
 {
-    display_lib_init();
+		
+    display_lib_init();    
 }
+#endif
+
 
 static void sniffer_display(wifi_lib_cfg_t wifi_lib_cfg)
 {
     ESP_LOGI(TAG, "%s, IP:" IPSTR " on channel %d", wifi_lib_cfg.ssid_name, IP2STR(&wifi_lib_cfg.ip), wifi_lib_cfg.channel);
-
+	#ifdef CONFIG_USE_LCD
     display_lib_print_std(0, 0, LCD_CYAN, "MAC: \t" MACSTR, MAC2STR(wifi_lib_cfg.mac));
     display_lib_print_std(0, 22, LCD_CYAN, "IP:  \t" IPSTR, IP2STR(&wifi_lib_cfg.ip));
     switch (wifi_lib_cfg.wifi_lib_mode)
@@ -219,8 +236,10 @@ static void sniffer_display(wifi_lib_cfg_t wifi_lib_cfg)
     default:
         break;
     }
+    #endif
     sniffer_display_filter();
 }
+
 
 void on_wifi_lib_event_handler(int32_t event_id, void *event_data)
 {
@@ -245,6 +264,7 @@ void on_wifi_lib_event_handler(int32_t event_id, void *event_data)
     }
 }
 
+#ifdef CONFIG_LILIGO_S3
 #define BUTTON_GPIO 14
 static button_handle_t g_button;
 static void button_single_click_cb(void *arg, void *data)
@@ -267,9 +287,11 @@ static void button_single_click_cb(void *arg, void *data)
     sniffer_set_rssi_filter(rssi);
     ESP_LOGI(TAG, "BUTTON_SINGLE_CLICK");
 }
+#endif
+
+#ifdef CONFIG_LILIGO_S3
 void init_button()
 {
-#ifdef CONFIG_LILIGO_S3
     button_config_t cfg = {
         .type = BUTTON_TYPE_GPIO,
         .long_press_time = CONFIG_BUTTON_LONG_PRESS_TIME_MS,
@@ -281,20 +303,28 @@ void init_button()
     };
     g_button = iot_button_create(&cfg);
     ESP_ERROR_CHECK(iot_button_register_cb(g_button, BUTTON_SINGLE_CLICK, button_single_click_cb, NULL));
-#endif
 }
+#endif
 
 void setup()
 {
-    ESP_LOGI(TAG, "[+] Startup...");
+	const esp_app_desc_t * esp_app_desc =esp_app_get_description();	
+    ESP_LOGI(TAG, "[++++++] Starting Sniffer Version: %s",esp_app_desc->version);
 
     nvs_init_flash();
-
+    
+	#ifdef CONFIG_LILIGO_S3
     init_button();
-
+	#endif
+	
+	#ifdef CONFIG_USE_LCD
     display_init();
+    #endif
+    
     led_init_default();
+           
     console_init();
+
 
     config_wifi_init();
 
@@ -305,17 +335,20 @@ void setup()
     ESP_LOGI(TAG, "MAC Address Is : " MACSTR, MAC2STR(ownMac.addr));
 
     capture_set_cb(on_start_capture, on_capture);
+    
     sniffer_init_config(ownMac, sniffer_on_event_handler);
+    
     sniffer_set_no_filter();
+    
 
     // addrFilter_t f = {{}, 0};
     // sniffer_set_addr2_filter(f);
 #ifdef CONFIG_LILIGO_S3
-    sniffer_start();
+   sniffer_start();
 #endif
 }
 
 void app_main(void)
 {
-    setup();
+    setup();    
 }

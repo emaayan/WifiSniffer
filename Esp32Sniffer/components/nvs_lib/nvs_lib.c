@@ -28,7 +28,7 @@ void nvs_bytes_to_hex(const uint8_t buf[], const size_t buf_sz, const char *deli
         {
             if (i > 0)
             {
-                buf2 += sprintf(buf2, delimiter);
+                buf2 += sprintf(buf2, "%s", delimiter);
             }
             buf2 += sprintf(buf2, "%02X", buf[i]);
         }
@@ -56,7 +56,7 @@ esp_err_t nvs_erase_value(const char *namespace, const char *key)
 
     return err;
 }
-
+/*
 static esp_err_t nvs_erase_all_values(const char *namespace)
 {
     nvs_handle_t nvs;
@@ -74,7 +74,7 @@ static esp_err_t nvs_erase_all_values(const char *namespace)
 
     nvs_close(nvs);
     return ESP_OK;
-}
+}*/
 
 int nvs_list_values(const char *partition, const char *namespace, nvs_type_t type)
 {

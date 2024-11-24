@@ -21,12 +21,12 @@ static bool console_read_filter(const char mac[], const size_t readBytes, addrFi
         }
         else if (readBytes > 12)
         {
-            printfln("Arugment exceeds 12 bytes %s ", mac);
+            printfln("Argument exceeds 12 bytes %s ", mac);
             return false;
         }
         else
         {
-            printfln("Argument must even in length %s ", mac);
+            printfln("Argument must be even in length %s ", mac);
             return false;
         }
     }
@@ -38,7 +38,7 @@ static bool console_read_filter(const char mac[], const size_t readBytes, addrFi
     }
 }
 
-static const char *TAG = "ConsoleSnifferCmd";
+//static const char *TAG = "ConsoleSnifferCmd";
 
 static struct
 {

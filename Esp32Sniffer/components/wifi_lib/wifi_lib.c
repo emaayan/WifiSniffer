@@ -143,7 +143,7 @@ void wifi_conf_set_static_ip(esp_netif_ip_info_t ip)
 static int s_retry_num = 0;
 
 static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
-{
+{  int8_t power = 0;
     switch (event_id)
     {
 
@@ -153,12 +153,16 @@ static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t eve
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         wifi_lib_post_event(WIFI_LIB_GOT_IP);
         ESP_LOGI(TAG, "IP:" IPSTR, IP2STR(&event->ip_info.ip));
+        ESP_ERROR_CHECK(esp_wifi_get_max_tx_power(&power));
+    	ESP_LOGI(TAG, "Max TX Power: %d", power);
         break;
     }
     case IP_EVENT_AP_STAIPASSIGNED:
     {
         ip_event_ap_staipassigned_t *event = (ip_event_ap_staipassigned_t *)event_data;
         ESP_LOGI(TAG, "IP assigned :" IPSTR, IP2STR(&event->ip));
+        ESP_ERROR_CHECK(esp_wifi_get_max_tx_power(&power));
+    	ESP_LOGI(TAG, "Max TX Power: %d", power);
         break;
     }
     case IP_EVENT_STA_LOST_IP:
@@ -265,11 +269,41 @@ static int wifi_generate_ssid(uint8_t *ssid_prefix, char *gen_ssid, size_t gen_s
     ESP_LOGI(TAG, "SSID will be %s:  ", gen_ssid);
     return sz;
 }
-static void wifi_set_conf(wifi_mode_t wifi_mode, wifi_interface_t interface, wifi_config_t conf)
+
+static esp_err_t wifi_set_conf(wifi_mode_t wifi_mode,wifi_interface_t interface, wifi_config_t conf,wifi_config_t conf_def)
 {
-    ESP_ERROR_CHECK(esp_wifi_set_mode(wifi_mode));
-    ESP_ERROR_CHECK(esp_wifi_set_config(interface, &conf));
+  wifi_country_t country = 
+  {
+      .cc = CONFIG_DEF_CC,
+      .schan = CONFIG_DEF_CC_SCHAN,
+      .nchan = CONFIG_DEF_CC_NCHAN,
+      .max_tx_power = CONFIG_DEF_CC_MAX_TX,
+      .policy = WIFI_COUNTRY_POLICY_AUTO,
+  };
+  ESP_ERROR_CHECK(esp_wifi_set_country(&country));
+
+  ESP_ERROR_CHECK(esp_wifi_set_mode(wifi_mode));
+  esp_err_t esp_wifi_set_config_err = esp_wifi_set_config(interface, &conf);
+  ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_set_config_err);
+  if (esp_wifi_set_config_err != ESP_OK) 
+  {
+    ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_set_config(interface, &conf_def));
+  }
+  return esp_wifi_set_config_err;
 }
+
+static wifi_config_t wifi_cfg_ap_def = {
+    .ap = {.ssid = CONFIG_DEF_AP_SSID, // in case of an error it won't generate
+                                       // the mac's prefix
+           .ssid_len = sizeof(CONFIG_DEF_AP_SSID),
+           .password = CONFIG_DEF_AP_SSID_PW,
+           .channel = CONFIG_SOFTAP_WIFI_CHANNEL,
+           .max_connection = CONFIG_MAX_STA_CONN,
+           .authmode = WIFI_AUTH_WPA_WPA2_PSK,
+           .pmf_cfg = {
+               .required = false,
+           }}};
+
 
 static esp_netif_t *wifi_soft_ap(ssid_cfg_t ssid_cfg, uint8_t channel)
 {
@@ -288,13 +322,22 @@ static esp_netif_t *wifi_soft_ap(ssid_cfg_t ssid_cfg, uint8_t channel)
     memcpy(wifi_cfg.ap.ssid, gen_ssid, sz);
     wifi_cfg.ap.ssid_len = sz;
     memcpy(wifi_cfg.ap.password, ssid_cfg.password, ssid_cfg.pass_sz);
-    wifi_set_conf(WIFI_MODE_AP, WIFI_IF_AP, wifi_cfg);
+    wifi_set_conf(WIFI_MODE_AP, WIFI_IF_AP, wifi_cfg, wifi_cfg_ap_def);
 
     ESP_LOGI(TAG, "Creating ap netif");
     esp_netif_t *netif = esp_netif_create_default_wifi_ap();
     return netif;
 }
 
+static wifi_config_t cfg_sta_def ={.sta =  {
+	  .ssid=CONFIG_DEF_STA_SSID,	  
+      .password=CONFIG_DEF_STA_SSID_PW,	  
+      .scan_method = WIFI_ALL_CHANNEL_SCAN,
+      .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+  }};
+  
+
+  
 static esp_netif_t *wifi_set_sta(ssid_cfg_t ssid_cfg)
 {
     wifi_sta_config_t staConf = {
@@ -305,7 +348,7 @@ static esp_netif_t *wifi_set_sta(ssid_cfg_t ssid_cfg)
     memcpy(staConf.password, ssid_cfg.password, ssid_cfg.pass_sz);
     wifi_config_t cfg = {.sta = staConf};
 
-    wifi_set_conf(WIFI_MODE_STA, WIFI_IF_STA, cfg);
+    wifi_set_conf(WIFI_MODE_STA, WIFI_IF_STA, cfg,cfg_sta_def);
 
     ESP_LOGD(TAG, "Attempting to join %s:  ", staConf.ssid);
     esp_netif_t *netif = esp_netif_create_default_wifi_sta();
@@ -332,6 +375,7 @@ void wifi_init(wifi_lib_event_handler_t wifi_lib_event_handler)
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg)); // allocate resource for WiFi driver
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));//for the timer in capture record, make it more accurate 
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
 }
 
@@ -430,7 +474,10 @@ void wifi_ap(const ssid_cfg_t ssid_cfg, uint8_t channel, esp_netif_ip_info_t ip,
     set_net_if(esp_netif);
     ESP_ERROR_CHECK(esp_wifi_start());
     wifi_nvs_set_mode(WIFI_LIB_MODE_AP);
-
+    wifi_nvs_set_ap_channel(channel);
+    wifi_nvs_set_ap_ssid((char*)ssid_cfg.ssid, ssid_cfg.ssid_sz);
+    wifi_nvs_set_ap_ssid_pw((char*)ssid_cfg.password, ssid_cfg.pass_sz);
+    
     ESP_LOGI(TAG, "Waiting for AP Mode");
     EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_EVENT_AP_START_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
     if (bits & WIFI_EVENT_AP_START_BIT)
@@ -439,7 +486,9 @@ void wifi_ap(const ssid_cfg_t ssid_cfg, uint8_t channel, esp_netif_ip_info_t ip,
         char msg[50] = "";
         wifi_get_ip(msg, sizeof(msg));
         ESP_LOGI(TAG, "IP: %s", msg);
-
+	    int8_t power = 0;
+	    ESP_ERROR_CHECK(esp_wifi_get_max_tx_power(&power));
+	    ESP_LOGI(TAG, "Max TX Power: %d", power);
         // wifi_lib_cfg_t wifi_lib_cfg = wifi_lib_get_config(esp_netif);
     }
     else

@@ -1,19 +1,19 @@
-menu "Sniffer Product"
+#menu "Sniffer Product"
 
-	choice LILYGO_TARGET
-        prompt "Blink LED type"
-        default LILIGO if IDF_TARGET_ESP32 
-        default LILIGO_S3 if IDF_TARGET_ESP32S3
-        default NOT_LILIGO if IDF_TARGET_ESP32C3
-        help
-            is target lilgyo
+#	choice LILYGO_TARGET
+        #prompt "Blink LED type"
+        #default LILIGO if IDF_TARGET_ESP32 
+        #default LILIGO_S3 if IDF_TARGET_ESP32S3
+        #default NOT_LILIGO if IDF_TARGET_ESP32C3
+        #help
+            #is target lilgyo
 
-        config LILIGO
-            bool "T-DISPLAY"
-        config LILIGO_S3
-            bool "T-DISPLAY-S3"
-        config NOT_LILIGO
-            bool "Standard ESP BOARD"
-    endchoice
+#        config LILIGO
+            #bool "T-DISPLAY"
+        #config LILIGO_S3
+            #bool "T-DISPLAY-S3"
+        #config NOT_LILIGO
+            #bool "Standard ESP BOARD"
+    #endchoice
 	
-endmenu
+#endmenu

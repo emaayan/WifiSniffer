@@ -20,7 +20,7 @@
 
 
 void led_init_default();
-void led_blink(uint8_t delay);
+void led_blink(uint16_t delay);
 void led_blink_fast();
 void led_blink_slow();
 

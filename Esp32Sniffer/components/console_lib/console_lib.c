@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "driver/uart_vfs.h"
+//#include "driver/uart_vfs.h"
 #include "esp_log.h"
 #include "esp_console.h"
 #include "esp_vfs_dev.h"
@@ -17,7 +17,7 @@
 #define CONSOLE_PROMPT_STR "sniffer> "
 #define CONSOLE_PROMPT LOG_COLOR_I CONSOLE_PROMPT_STR LOG_RESET_COLOR
 
-static const char *TAG = "ConsoleLib";
+//static const char *TAG = "ConsoleLib";
 
 void console_begin()
 {
@@ -52,12 +52,12 @@ static int console_set_line_endings(esp_line_endings_t esp_line_endings)
     }
     return err_line_ends;
 }*/
-
+/*
 static void console_serial_begin(uart_port_t port, int baud) // TODO: externlize serial driver config
 {
-    /* Configure UART. Note that REF_TICK is used so that the baud rate remains
-     * correct while APB frequency is changing in light sleep mode.
-     */
+    //Configure UART. Note that REF_TICK is used so that the baud rate remains
+    // correct while APB frequency is changing in light sleep mode.
+     //
     const uart_config_t uart_config = {
         .baud_rate = baud,
         .data_bits = UART_DATA_8_BITS,
@@ -69,11 +69,11 @@ static void console_serial_begin(uart_port_t port, int baud) // TODO: externlize
         .source_clk = UART_SCLK_XTAL,
 #endif
     };
-    /* Install UART driver for interrupt-driven reads and writes */
+    // Install UART driver for interrupt-driven reads and writes 
     ESP_ERROR_CHECK(uart_driver_install(port, CONSOLE_UART_RX_BUFFER_SIZE, 0, 0, NULL, 0));
     ESP_ERROR_CHECK(uart_param_config(port, &uart_config));
 }
-
+*/
 void console_config_init(void)
 {
 //    /* Drain stdout before reconfiguring it */

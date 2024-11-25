@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include "driver/gpio.h"
 
-#include "esp_wifi_types_generic.h"
+//#include "esp_wifi_types_generic.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -362,7 +362,7 @@ void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type)
 			        
 			}
 		}
-	    else
+		else
 	    {
 	        macFilter= true;
 	    }
